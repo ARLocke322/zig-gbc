@@ -100,12 +100,7 @@ pub const Bus = struct {
             0x0000...0x7FFF => self.cartridge.write(address, value),
             0x8000...0x9FFF => self.ppu.write8(address, value),
             0xA000...0xBFFF => self.cartridge.write(address, value),
-            0xC000...0xCFFF => {
-                if (address == 0xC0AF) {
-                    std.debug.print("WRITE to C0AF: {X:0>2} from PC:{X:0>4}\n", .{ value, self.cpu.PC.getHiLo() });
-                }
-                self.wram_0[address - 0xC000] = value;
-            },
+            0xC000...0xCFFF => self.wram_0[address - 0xC000] = value,
             // 0xD000...0xDFFF => self.wram_n[address - 0xD000] = value,
             0xD000...0xDFFF => {
                 const ix = (address - 0xD000) + (@as(usize, self.wbk) - 1) * 0x1000;
@@ -174,7 +169,7 @@ pub const Bus = struct {
 
                     if (transfer_mode == 0) {
                         for (0..num_bytes) |i| {
-                            const byte = self.ppu.read8(src_addr + @as(u16, @intCast(i)));
+                            const byte = self.read8(src_addr + @as(u16, @intCast(i)));
                             self.ppu.write8(dest_addr + @as(u16, @intCast(i)), byte);
                         }
 
