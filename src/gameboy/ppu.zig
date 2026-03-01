@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const InterruptController = @import("interrupt_controller.zig").InterruptController;
 const Cpu = @import("cpu.zig").Cpu;
+const Bus = @import("bus.zig").Bus;
 const renderScanlineDmg = @import("render_dmg.zig").renderScanlineDmg;
 const renderScanlineCgb = @import("render_cgb.zig").renderScanlineCgb;
 
@@ -66,14 +67,14 @@ pub const Ppu = struct {
             .tile_map_1 = [_]u8{0} ** 0x800,
             .tile_map_2 = [_]u8{0} ** 0x800,
             .oam = [_]u8{0} ** 0xA0,
-            .lcd_control = 0,
-            .stat = 0,
+            .lcd_control = 0x91,
+            .stat = 0x85,
             .scy = 0,
             .scx = 0,
             .ly = 0,
             .lyc = 0,
             .dma = 0,
-            .bgp = 0,
+            .bgp = 0xFC,
             .obp0 = 0,
             .obp1 = 0,
             .wy = 0,
@@ -239,7 +240,7 @@ pub const Ppu = struct {
         if (mode != 3) self.obj_cram[tgt_address] = val;
     }
 
-    pub fn tick(self: *Ppu, cpu: *Cpu, cycles: u16) void {
+    pub fn tick(self: *Ppu, cpu: *Cpu, bus: *Bus, cycles: u16) void {
         if ((self.lcd_control & 0x80) == 0) {
             self.set_ppu_mode(2);
             self.ly = 0;
@@ -250,17 +251,17 @@ pub const Ppu = struct {
         self.cycles += cycles;
         const mode: u2 = @truncate(self.stat);
         switch (mode) {
-            0x00 => self.handle_hblank(cpu),
+            0x00 => self.handle_hblank(cpu, bus),
             0x01 => self.handle_vblank(),
             0x02 => self.handle_oam_scan(),
             0x03 => self.handle_render(),
         }
     }
 
-    fn handle_hblank(self: *Ppu, cpu: *Cpu) void {
+    fn handle_hblank(self: *Ppu, cpu: *Cpu, bus: *Bus) void {
         if (self.cycles >= 204) {
             if (self.hdma_active and self.ly < 144) {
-                self.execute_hdma_block(cpu);
+                self.execute_hdma_block(cpu, bus);
             }
             self.ly +%= 1;
             self.cycles -= 204;
@@ -273,9 +274,9 @@ pub const Ppu = struct {
         }
     }
 
-    fn execute_hdma_block(self: *Ppu, cpu: *Cpu) void {
+    fn execute_hdma_block(self: *Ppu, cpu: *Cpu, bus: *Bus) void {
         for (0..0x10) |i| {
-            const byte = self.read8(self.hdma_src + @as(u16, @intCast(i)));
+            const byte = bus.read8(self.hdma_src + @as(u16, @intCast(i)));
             // self.write8(self.hdma_dest, byte);
             self.write8(self.hdma_dest + @as(u16, @intCast(i)), byte);
         }

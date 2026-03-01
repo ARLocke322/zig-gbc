@@ -45,8 +45,8 @@ pub const Console = struct {
         }
 
         if (!self.cpu.halted) {
+            // self.debugPrint();
             const opcode = self.cpu.fetch();
-            self.debugPrint();
             cycles = self.cpu.decode_execute(opcode);
         }
 
@@ -62,7 +62,7 @@ pub const Console = struct {
         self.cpu.stall_cycles = 0;
 
         self.timer.tick(total_cycles * 4);
-        self.ppu.tick(self.cpu, total_cycles * 4);
+        self.ppu.tick(self.cpu, self.bus, total_cycles * 4);
 
         self.cycles += total_cycles;
         return total_cycles;
