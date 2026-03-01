@@ -46,6 +46,7 @@ pub const Console = struct {
 
         if (!self.cpu.halted) {
             const opcode = self.cpu.fetch();
+            self.debugPrint();
             cycles = self.cpu.decode_execute(opcode);
         }
 
@@ -65,5 +66,18 @@ pub const Console = struct {
 
         self.cycles += total_cycles;
         return total_cycles;
+    }
+    var instruction_count: u64 = 0;
+
+    fn debugPrint(self: *Console) void {
+        instruction_count += 1;
+        if (instruction_count < 50) {
+            const pc = self.cpu.PC.getHiLo();
+            const opcode = self.cpu.mem.read8(pc);
+            std.debug.print("[{d}] PC:{X:0>4} OP:{X:0>2} AF:{X:0>4} SP:{X:0>4}\n", .{
+                instruction_count,     pc,                    opcode,
+                self.cpu.AF.getHiLo(), self.cpu.SP.getHiLo(),
+            });
+        }
     }
 };

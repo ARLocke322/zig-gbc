@@ -6,9 +6,9 @@ const renderScanlineDmg = @import("render_dmg.zig").renderScanlineDmg;
 const renderScanlineCgb = @import("render_cgb.zig").renderScanlineCgb;
 
 pub const Ppu = struct {
-    tile_data: [0x1800]u8, // 8000 - 97FF, 2 banks in cgb
-    tile_map_1: [0x400]u8, // 9800 - 9BFF (fixed size), 2 banks in cgb
-    tile_map_2: [0x400]u8, // 9C00 - 9FFF (fixed size), 2 banks in cgb
+    tile_data: [0x1800 * 2]u8, // 0x1800 * 2 banks
+    tile_map_1: [0x400 * 2]u8, // 0x400 * 2 banks
+    tile_map_2: [0x400 * 2]u8, // 0x400 * 2 banks
     oam: [0xA0]u8, // FE00 - FE9F (fixed size)
     lcd_control: u8, // FF40
     stat: u8, // FF41
@@ -62,9 +62,9 @@ pub const Ppu = struct {
 
     pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
         return Ppu{
-            .tile_data = [_]u8{0} ** 0x1800,
-            .tile_map_1 = [_]u8{0} ** 0x400,
-            .tile_map_2 = [_]u8{0} ** 0x400,
+            .tile_data = [_]u8{0} ** 0x3000,
+            .tile_map_1 = [_]u8{0} ** 0x800,
+            .tile_map_2 = [_]u8{0} ** 0x800,
             .oam = [_]u8{0} ** 0xA0,
             .lcd_control = 0,
             .stat = 0,
@@ -276,7 +276,8 @@ pub const Ppu = struct {
     fn execute_hdma_block(self: *Ppu, cpu: *Cpu) void {
         for (0..0x10) |i| {
             const byte = self.read8(self.hdma_src + @as(u16, @intCast(i)));
-            self.write8(self.hdma_dest, byte);
+            // self.write8(self.hdma_dest, byte);
+            self.write8(self.hdma_dest + @as(u16, @intCast(i)), byte);
         }
 
         self.hdma_src += 0x10;

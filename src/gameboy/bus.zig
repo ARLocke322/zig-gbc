@@ -9,7 +9,7 @@ const assert = std.debug.assert;
 
 pub const Bus = struct {
     wram_0: [0x1000]u8 = .{0} ** 0x1000, // 0xC000-0xCFFF: 4 KiB WRAM
-    wram_n: [0x1000]u8 = .{0} ** 0x1000, // 0xD000-0xDFFF: 4 KiB WRAM (switchable in CGB)
+    wram_n: [7 * 0x1000]u8 = .{0} ** (7 * 0x1000), // 0xD000-0xDFFF: 4 KiB WRAM (switchable in CGB)
     hram: [0x7F]u8 = .{0} ** 0x7F, // 0xFF80-0xFFFE: HRAM
     audio_regs: [0x30]u8 = .{0} ** 0x30, // FF10-FF3F
 
@@ -50,7 +50,8 @@ pub const Bus = struct {
             0xC000...0xCFFF => self.wram_0[address - 0xC000],
             0xD000...0xDFFF => {
                 if (self.cgb) {
-                    const ix = address + ((@as(u16, self.wbk) - 1) * 0xD000);
+                    // const ix = address + ((@as(u16, self.wbk) - 1) * 0xD000);
+                    const ix = (address - 0xD000) + (@as(usize, self.wbk) - 1) * 0x1000;
                     assert(ix < self.wram_n.len);
                     return self.wram_n[ix];
                 } else return self.wram_n[address - 0xD000];
@@ -99,8 +100,17 @@ pub const Bus = struct {
             0x0000...0x7FFF => self.cartridge.write(address, value),
             0x8000...0x9FFF => self.ppu.write8(address, value),
             0xA000...0xBFFF => self.cartridge.write(address, value),
-            0xC000...0xCFFF => self.wram_0[address - 0xC000] = value,
-            0xD000...0xDFFF => self.wram_n[address - 0xD000] = value,
+            0xC000...0xCFFF => {
+                if (address == 0xC0AF) {
+                    std.debug.print("WRITE to C0AF: {X:0>2} from PC:{X:0>4}\n", .{ value, self.cpu.PC.getHiLo() });
+                }
+                self.wram_0[address - 0xC000] = value;
+            },
+            // 0xD000...0xDFFF => self.wram_n[address - 0xD000] = value,
+            0xD000...0xDFFF => {
+                const ix = (address - 0xD000) + (@as(usize, self.wbk) - 1) * 0x1000;
+                self.wram_n[ix] = value;
+            },
             0xE000...0xFDFF => {},
             0xFE00...0xFE9F => self.ppu.write8(address, value),
             0xFEA0...0xFEFF => {},
@@ -155,9 +165,9 @@ pub const Bus = struct {
                     const src_addr: u16 = 0xFFF0 & // bottom 4 bits ignored
                         ((@as(u16, self.ppu.rVDMA_SRC_HIGH) << 8) |
                             (self.ppu.rVDMA_SRC_LOW));
-                    const dest_addr: u16 = 0x1FF0 & // only 12-4 respected
+                    const dest_addr: u16 = 0x8000 | (0x1FF0 & // only 12-4 respected
                         ((@as(u16, self.ppu.rVDMA_DEST_HIGH) << 8) |
-                            (self.ppu.rVDMA_DEST_LOW));
+                            (self.ppu.rVDMA_DEST_LOW)));
 
                     const num_blocks: u16 = @as(u16, value & 0x7F) + 1;
                     const num_bytes: u16 = num_blocks * 0x10;
@@ -165,7 +175,7 @@ pub const Bus = struct {
                     if (transfer_mode == 0) {
                         for (0..num_bytes) |i| {
                             const byte = self.ppu.read8(src_addr + @as(u16, @intCast(i)));
-                            self.ppu.write8(dest_addr, byte);
+                            self.ppu.write8(dest_addr + @as(u16, @intCast(i)), byte);
                         }
 
                         self.cpu.stall_cycles += num_blocks * 32;
