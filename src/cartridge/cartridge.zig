@@ -21,6 +21,7 @@ pub const Cartridge = struct {
         std.debug.print("MBC Bit: {x}\n", .{data[0x147]});
         const cgb_flag = data[0x143];
         const cgb: bool = cgb_flag == 0x80 or cgb_flag == 0xC0;
+        std.debug.print("CGB: {any}\n", .{cgb});
 
         return switch (data[0x147]) {
             0x00 => initCart(MBC0, allocator, data, ram_size, cgb),

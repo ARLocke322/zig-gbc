@@ -31,10 +31,10 @@ pub const Cpu = struct {
         cgb: bool,
     ) Cpu {
         return Cpu{
-            .AF = if (cgb) Register.init(0x11B0) else Register.init(0x01B0),
-            .BC = Register.init(0x0013),
-            .DE = Register.init(0x00D8),
-            .HL = Register.init(0x014D),
+            .AF = Register.init(if (cgb) 0x11B0 else 0x01B0),
+            .BC = Register.init(if (cgb) 0x0000 else 0x0013),
+            .DE = Register.init(if (cgb) 0xFF56 else 0x00D8),
+            .HL = Register.init(if (cgb) 0x000D else 0x014D),
             .SP = Register.init(0xFFFE),
             .PC = Register.init(0x0100),
             .KEY1 = 0,
