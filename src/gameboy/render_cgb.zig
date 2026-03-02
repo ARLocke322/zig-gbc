@@ -3,6 +3,7 @@ const assert = @import("std").debug.assert;
 const PALETTE: [4]u32 = .{ 0xFFE0F8D0, 0xFF88C070, 0xFF346856, 0xFF081820 };
 
 pub fn renderScanlineCgb(ppu: *Ppu) void {
+    ppu.bg_idx = .{0} ** 160;
     renderBackgroundCgb(ppu);
     if ((ppu.latched_lcd_control & 0x20) != 0 and
         ppu.ly >= ppu.latched_wy and
@@ -75,6 +76,8 @@ fn renderPixelCgb(
 
     // calculate tile index address and read it
     const tilemap_addr: u16 = map_base + @as(u16, tile_y) * 32 + tile_x;
+    const prev_bank = ppu.vram_bank;
+    ppu.vram_bank = 0;
     const tile_idx = ppu.read8(tilemap_addr); // e.g. we are drawing tile 4
 
     // calculate offset based on lcd control + tile index
@@ -106,13 +109,14 @@ fn renderPixelCgb(
     const byte1: u8 = ppu.read8(tile_addr + pixel_y * 2);
     const byte2: u8 = ppu.read8(tile_addr + pixel_y * 2 + 1);
 
-    ppu.vram_bank = 0;
+    ppu.vram_bank = prev_bank;
 
     // calculate the pixels position in this row of bytes, then get the color idx
     const bit_pos: u3 = @intCast(7 - pixel_x);
     const color_idx: u2 = @intCast(((byte1 >> bit_pos) & 1) | (((byte2 >> bit_pos) & 1) << 1));
 
     const palette = getCgbPalette(ppu.bg_cram, cgb_palette);
+    ppu.bg_idx[x] = color_idx;
     ppu.display_buffer[@as(u32, ppu.ly) * 160 + x] = palette[color_idx];
 }
 
@@ -139,6 +143,7 @@ fn renderSpritesCgb(ppu: *Ppu) void {
     // Scan OAM for sprites on this line (max 10)
     var sprites_on_line: [10]u8 = undefined;
     var sprite_count: u8 = 0;
+    const master_priority: bool = (ppu.latched_lcd_control & 0x01) != 0;
     var i: u8 = 0;
 
     while (i < 40 and sprite_count < 10) : (i += 1) {
@@ -176,10 +181,11 @@ fn renderSpritesCgb(ppu: *Ppu) void {
         if (y_flip == 1) pixel_y = (sprite_height - 1) - pixel_y;
 
         const tile_addr: u16 = 0x8000 + tile_idx * 16;
+        const prev_bank = ppu.vram_bank;
         ppu.vram_bank = bank;
         const byte1: u8 = ppu.read8(tile_addr + pixel_y * 2);
         const byte2: u8 = ppu.read8(tile_addr + pixel_y * 2 + 1);
-        ppu.vram_bank = 0;
+        ppu.vram_bank = prev_bank;
 
         for (0..8) |px| {
             // skip if not on screen
@@ -197,7 +203,7 @@ fn renderSpritesCgb(ppu: *Ppu) void {
             if (color_idx == 0) continue; // transparent
 
             const buffer_idx = @as(u32, ppu.ly) * 160 + screen_x;
-            if (priority == 0 or ppu.display_buffer[buffer_idx] == palette[0]) {
+            if (priority == 0 or !master_priority or ppu.bg_idx[screen_x] == 0) {
                 ppu.display_buffer[buffer_idx] = palette[color_idx];
             }
         }
