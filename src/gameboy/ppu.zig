@@ -60,6 +60,7 @@ pub const Ppu = struct {
     bg_cram: [64]u8,
     obj_cram: [64]u8,
     //
+    bg_idx: [160]u2,
 
     pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
         return Ppu{
@@ -91,6 +92,7 @@ pub const Ppu = struct {
             .cgb = cgb,
             .bg_cram = [_]u8{0} ** 0x40,
             .obj_cram = [_]u8{0} ** 0x40,
+            .bg_idx = [_]u2{0} ** 160,
         };
     }
 
@@ -98,6 +100,9 @@ pub const Ppu = struct {
         assert((addr >= 0x8000 and addr <= 0x9FFF) or
             (addr >= 0xFE00 and addr <= 0xFF4F) or
             (addr >= 0xFF68 and addr <= 0xFF6C));
+        // const current_mode = self.get_ppu_mode();
+        // if (addr >= 0x8000 and addr <= 0x9FFF and current_mode == 3) return 0xFF;
+        // if (addr >= 0xFE00 and addr <= 0xFE9F and (current_mode == 2 or current_mode == 3)) return 0xFF;
         return switch (addr) {
             0x8000...0x97FF => {
                 if (self.vram_bank == 0) {
@@ -151,6 +156,9 @@ pub const Ppu = struct {
         assert((addr >= 0x8000 and addr <= 0x9FFF) or
             (addr >= 0xFE00 and addr <= 0xFF4F) or
             (addr >= 0xFF68 and addr <= 0xFF6C));
+        // const current_mode = self.get_ppu_mode();
+        // if (addr >= 0x8000 and addr <= 0x9FFF and current_mode == 3) return;
+        // if (addr >= 0xFE00 and addr <= 0xFE9F and (current_mode == 2 or current_mode == 3)) return;
         switch (addr) {
             0x8000...0x97FF => {
                 if (self.vram_bank == 0) {
@@ -368,5 +376,9 @@ pub const Ppu = struct {
 
     fn set_ppu_mode(self: *Ppu, mode: u2) void {
         self.stat = (self.stat & 0xFC) | mode;
+    }
+
+    fn get_ppu_mode(self: *Ppu) u2 {
+        return @truncate(self.stat);
     }
 };

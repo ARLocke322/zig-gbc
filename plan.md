@@ -4,9 +4,7 @@
 
 - [ ] APU
 - [ ] MBC5
-- [ ] CGB
 - [ ] Save + Load state
-- [ ] rom selection / show file dialog
 
 ## Tests
 
@@ -44,6 +42,8 @@
 - [x] MCB2 and MCB3
 - [x] Save + Load game
 - [x] toggleable speed up
+- [x] CGB
+- [x] rom selection / show file dialog
 
 ## Cycle accurate stuff
 
