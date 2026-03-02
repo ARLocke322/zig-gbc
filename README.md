@@ -3,6 +3,7 @@
 A Game Boy Colour emulator written in Zig.
 
 ![Demo](demo.gif) ![Demo](demo2.gif) 
+![Demo](demo3.gif) ![Demo](demo4.gif) 
 
 ## Features
 
