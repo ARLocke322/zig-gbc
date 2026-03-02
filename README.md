@@ -1,6 +1,6 @@
 # zig-gameboy
 
-A Game Boy emulator written in Zig.
+A Game Boy Colour emulator written in Zig.
 
 ![Demo](demo.gif) ![Demo](demo2.gif) 
 
@@ -9,7 +9,7 @@ A Game Boy emulator written in Zig.
 - Full Sharp LR35902 instruction set
 - All memory structures and registers, apart from ALU, CGB and Serial Transfer
 - Currently supports 4 GameBoy cartridge types with automatic detection
-- Full PPU using scanline rendering with DMG colour palettes
+- Full PPU using scanline rendering with DMG and CGB modes
 - Various components such as the Timer, Interrupt Controller, and Joypad
 - SDL3 GUI using Zig's C interoperability, implementing rendering and ROM selection
 - Working save games
@@ -39,7 +39,6 @@ zig build run
 
 ## Planned features
 
-- CMG Graphics
 - Audio Processing Unit
 - Save states
 - Additional MBCs
