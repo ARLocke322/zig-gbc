@@ -13,8 +13,8 @@ timer: *Timer,
 bus: *Bus,
 cpu: *Cpu,
 ppu: *Ppu,
-cycles: u32,
 
+// Creates a Console struct with pointers to various components
 pub fn init(
     interrupt_controller: *InterruptController,
     timer: *Timer,
@@ -28,7 +28,6 @@ pub fn init(
         .bus = bus,
         .cpu = cpu,
         .ppu = ppu,
-        .cycles = 0,
     };
 }
 
@@ -70,8 +69,6 @@ pub fn step(
     // Ticks components by number of cycles taken (converted to t cycles)
     self.timer.tick(total_cycles * 4);
     self.ppu.tick(self.cpu, self.bus, total_cycles * 4);
-
-    self.cycles += total_cycles;
 
     return total_cycles;
 }

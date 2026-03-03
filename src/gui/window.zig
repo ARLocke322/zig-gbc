@@ -11,6 +11,7 @@ const SCALE = 4;
 const WIDTH = 160;
 const HEIGHT = 144;
 const CYCLES_PER_FRAME: u64 = 70224;
+var turbo: bool = false;
 
 pub const Window = struct {
     window: *SDL.SDL_Window,
@@ -67,7 +68,7 @@ pub const Window = struct {
 
                     SDL.SDL_EVENT_KEY_DOWN => {
                         if (ev.key.scancode == SDL.SDL_SCANCODE_S and !ev.key.repeat) {
-                            frame_time_ms = if (frame_time_ms == 16) 4 else 16;
+                            turbo = !turbo;
                         } else if (!ev.key.repeat) {
                             setKey(gb.bus.joypad, ev.key.scancode, true);
                         }
@@ -81,11 +82,14 @@ pub const Window = struct {
                 }
             }
 
-            var frame_cycles: u64 = 0;
-            while (frame_cycles < CYCLES_PER_FRAME) {
-                frame_cycles += try gb.step() * 4;
-            }
+            const frames_to_run: u64 = if (turbo) 4 else 1;
 
+            for (0..frames_to_run) |_| {
+                var frame_cycles: u64 = 0;
+                while (frame_cycles < CYCLES_PER_FRAME) {
+                    frame_cycles += try gb.step() * 4;
+                }
+            }
             _ = SDL.SDL_UpdateTexture(
                 self.texture,
                 null,
