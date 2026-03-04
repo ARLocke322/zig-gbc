@@ -48,13 +48,13 @@ fn renderWindowDmg(ppu: *Ppu) void {
         palette[i] = PALETTE[(ppu.latched_bgp >> @intCast(i * 2)) & 3];
     }
 
-    assert(ppu.latched_wx > 6);
-    const window_x_start: u8 = ppu.latched_wx - 7;
+    const window_x_start: u8 = if (ppu.latched_wx > 7) ppu.latched_wx - 7 else 0;
+    const window_x_offset: u8 = if (ppu.latched_wx >= 7) 0 else 7 - ppu.latched_wx;
 
     for (0..160) |x| {
         if (@as(u8, @truncate(x)) < window_x_start) continue;
         // absolute x, y positions in window
-        const map_x: u8 = @as(u8, @truncate(x)) - window_x_start;
+        const map_x: u8 = @as(u8, @truncate(x)) - window_x_start + window_x_offset;
         const map_y: u8 = ppu.window_line;
         renderPixelDmg(
             ppu,

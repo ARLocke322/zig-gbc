@@ -39,13 +39,13 @@ fn renderWindowCgb(ppu: *Ppu) void {
     const tile_base: u16 = if ((ppu.latched_lcd_control & 0x10) != 0) 0x8000 else 0x9000;
     const use_unsigned_tiles = (ppu.latched_lcd_control & 0x10) != 0;
 
-    assert(ppu.latched_wx > 6);
-    const window_x_start: u8 = ppu.latched_wx - 7;
+    const window_x_start: u8 = if (ppu.latched_wx > 7) ppu.latched_wx - 7 else 0;
+    const window_x_offset: u8 = if (ppu.latched_wx >= 7) 0 else 7 - ppu.latched_wx;
 
     for (0..160) |x| {
         if (@as(u8, @truncate(x)) < window_x_start) continue;
         // absolute x, y positions in window
-        const map_x: u8 = @as(u8, @truncate(x)) - window_x_start;
+        const map_x: u8 = @as(u8, @truncate(x)) - window_x_start + window_x_offset;
         const map_y: u8 = ppu.window_line;
         renderPixelCgb(
             ppu,
