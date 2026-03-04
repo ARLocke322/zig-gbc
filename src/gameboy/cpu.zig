@@ -1,4 +1,3 @@
-const std = @import("std");
 const execute = @import("execute.zig").execute;
 const helpers = @import("helpers.zig");
 
