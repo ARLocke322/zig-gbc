@@ -32,9 +32,9 @@ pub fn init(
 }
 
 // Fetches, Decodes and Executes a single instruction, then advances
-//  components by however many cycles the instruction took
+//   components by however many cycles the instruction took
 // Checks if IME is scheduled and handles the interrupt after the next
-//  instruction if so
+//   instruction if so
 // Returns cycles taken for GUI to synchronise with frames
 pub fn step(
     self: *Console,

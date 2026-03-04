@@ -7,11 +7,11 @@ const Bus = @import("bus.zig").Bus;
 const InterruptController = @import("interrupt_controller.zig").InterruptController;
 
 // The CPU component, handles fetching, decoding, executing, and interrupt
-//  servicing
+//   servicing
 pub const Cpu = @This();
 
 // The 6 16-bit registers, accessible either as a single 16-bit register
-//  or 2 8-bit registers
+//   or 2 8-bit registers
 AF: Register,
 BC: Register,
 DE: Register,
@@ -26,7 +26,7 @@ mem: *Bus,
 interrupt_controller: *InterruptController,
 
 // IME_scheduled queues the interrupt for after the next instruction, IME
-//  triggers the interrupt to be handled
+//   triggers the interrupt to be handled
 IME: bool,
 IME_scheduled: bool,
 
@@ -70,8 +70,8 @@ pub fn decode_execute(self: *Cpu, instruction: u8) u8 {
 }
 
 // Checks for pending interrupts, unhalts CPU if found, then if IME is enabled
-//  services the higheset priority one, disables IME, acknowledges the
-//  interrupt, pushes PC to stack and jumps to its handler vector
+//   services the higheset priority one, disables IME, acknowledges the
+//   interrupt, pushes PC to stack and jumps to its handler vector
 pub fn handle_interrupt(self: *Cpu) void {
     const pending = self.interrupt_controller.get_pending();
 
