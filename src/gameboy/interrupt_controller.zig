@@ -13,7 +13,7 @@ IE: u8,
 //   | Blank | Joypad | Serial | Timer | LCD | VBLANK |
 IF: u8,
 
-// Enables clearer req/ack syntax: request(InterruptController.VBLANK)
+// Enables cleaner req/ack syntax: request(InterruptController.VBLANK)
 pub const VBLANK = 0;
 pub const LCD_STAT = 1;
 pub const TIMER = 2;
