@@ -3,7 +3,6 @@
 ## To Do
 
 - [ ] APU
-- [ ] MBC5
 - [ ] Save + Load state
 
 ## Tests
@@ -44,6 +43,7 @@
 - [x] toggleable speed up
 - [x] CGB
 - [x] rom selection / show file dialog
+- [x] MBC5
 
 ## Cycle accurate stuff
 
