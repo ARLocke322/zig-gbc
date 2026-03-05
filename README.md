@@ -42,9 +42,9 @@ zig build run
 
 - Audio Processing Unit
 - Save states
-- Additional MBCs
 - FIFO rendering
 - Full cycle accuracy
+- Additional MBCs
 
 ## Test Roms
 - Passes Blargg cpu instructions and instruction timing tests
