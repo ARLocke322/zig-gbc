@@ -8,7 +8,7 @@ A Game Boy Colour emulator written in Zig.
 ## Features
 
 - Full Sharp LR35902 instruction set
-- All memory structures and registers, apart from ALU, CGB and Serial Transfer
+- All memory structures and registers, apart from ALU and Serial Transfer
 - Currently supports 4 GameBoy cartridge types with automatic detection
 - Full PPU using scanline rendering with DMG and CGB modes
 - Various components such as the Timer, Interrupt Controller, and Joypad
@@ -43,6 +43,8 @@ zig build run
 - Audio Processing Unit
 - Save states
 - Additional MBCs
+- FIFO rendering
+- Full cycle accuracy
 
 ## Test Roms
 - Passes Blargg cpu instructions and instruction timing tests

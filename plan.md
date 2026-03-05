@@ -4,6 +4,10 @@
 
 - [ ] APU
 - [ ] Save + Load state
+- [ ] Fifo rendering
+- [ ] Full cycle accuracy
+- [ ] Refactor CPU instruction interface
+- [ ] Refactor component registers into packed structs
 
 ## Tests
 
@@ -44,8 +48,3 @@
 - [x] CGB
 - [x] rom selection / show file dialog
 - [x] MBC5
-
-## Cycle accurate stuff
-
-- [ ] cpu instructions
-- [ ] ppu dma
