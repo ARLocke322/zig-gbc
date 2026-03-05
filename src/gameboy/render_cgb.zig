@@ -3,6 +3,10 @@ const assert = @import("std").debug.assert;
 const PALETTE: [4]u32 = .{ 0xFFE0F8D0, 0xFF88C070, 0xFF346856, 0xFF081820 };
 
 pub fn renderScanlineCgb(ppu: *Ppu) void {
+    for (0..8) |i| {
+        ppu.bg_palettes[i] = getCgbPalette(ppu.bg_cram, @intCast(i));
+        ppu.obj_palettes[i] = getCgbPalette(ppu.obj_cram, @intCast(i));
+    }
     ppu.bg_idx = .{0} ** 160;
     renderBackgroundCgb(ppu);
     if ((ppu.latched_lcd_control & 0x20) != 0 and
@@ -115,7 +119,8 @@ fn renderPixelCgb(
     const bit_pos: u3 = @intCast(7 - pixel_x);
     const color_idx: u2 = @intCast(((byte1 >> bit_pos) & 1) | (((byte2 >> bit_pos) & 1) << 1));
 
-    const palette = getCgbPalette(ppu.bg_cram, cgb_palette);
+    // const palette = getCgbPalette(ppu.bg_cram, cgb_palette);
+    const palette = ppu.bg_palettes[cgb_palette];
     ppu.bg_idx[x] = color_idx;
     ppu.display_buffer[@as(u32, ppu.ly) * 160 + x] = palette[color_idx];
 }
@@ -175,7 +180,8 @@ fn renderSpritesCgb(ppu: *Ppu) void {
         const bank: u1 = @truncate(sprite_flags >> 3);
         const cgb_palette: u3 = @truncate(sprite_flags);
 
-        const palette = getCgbPalette(ppu.obj_cram, cgb_palette);
+        // const palette = getCgbPalette(ppu.obj_cram, cgb_palette);
+        const palette = ppu.obj_palettes[cgb_palette];
 
         var pixel_y: u8 = ppu.ly + 16 - sprite_y;
         if (y_flip == 1) pixel_y = (sprite_height - 1) - pixel_y;

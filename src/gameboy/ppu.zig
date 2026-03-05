@@ -61,6 +61,8 @@ pub const Ppu = struct {
     obj_cram: [64]u8,
     //
     bg_idx: [160]u2,
+    bg_palettes: [8][4]u32 = undefined,
+    obj_palettes: [8][4]u32 = undefined,
 
     pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
         return Ppu{
