@@ -38,6 +38,16 @@ CH1_envelope_timer: u3,
 CH2_envelope_timer: u3,
 CH4_envelope_timer: u3,
 
+CH1_frequency_timer: u14,
+CH2_frequency_timer: u14,
+CH3_frequency_timer: u13,
+CH4_frequency_timer: u22,
+
+CH1_waveform_position: u3,
+CH2_waveform_position: u3,
+CH3_waveform_position: u5,
+CH4_LFSR: u16,
+
 cycles: u16,
 frame_sequencer_step: u3,
 sample_buffer: [512 * 2]f32 = undefined,
@@ -121,6 +131,52 @@ pub fn tick(self: *Apu, cycles: u16) void {
         }
         self.frame_sequencer_step +%= 1;
     }
+
+    self.tickFrequencyTimers(cycles);
+}
+
+fn tickFrequencyTimers(self: *Apu, cycles: u16) void {
+    for (0..cycles) |_| {
+        self.CH1_frequency_timer -= 1;
+        if (self.CH1_frequency_timer == 0) {
+            self.CH1_frequency_timer = (2048 -
+                (@as(u11, self.rAUD1HIGH.period) << 8 | self.rAUD1LOW.period)) * 4;
+            self.CH1_waveform_position +%= 1;
+        }
+
+        self.CH2_frequency_timer -= 1;
+        if (self.CH2_frequency_timer == 0) {
+            self.CH2_frequency_timer = (2048 -
+                (@as(u11, self.rAUD2HIGH.period) << 8 | self.rAUD2LOW.period)) * 4;
+            self.CH2_waveform_position +%= 1;
+        }
+
+        self.CH3_frequency_timer -= 1;
+        if (self.CH3_frequency_timer == 0) {
+            self.CH3_frequency_timer = (2048 -
+                (@as(u11, self.rAUD3HIGH.period) << 8 | self.rAUD3LOW.period)) * 2;
+            self.CH3_waveform_position +%= 1;
+        }
+
+        self.CH4_frequency_timer -= 1;
+        if (self.CH4_frequency_timer == 0) {
+            const divisor = if (self.rAUD4POLY.clock_divider == 0)
+                8
+            else
+                self.rAUD4POLY.clock_divider * 16;
+            self.CH4_frequency_timer = divisor << self.rAUD4POLY.clock_shift;
+            self.tickLFSR();
+        }
+    }
+}
+
+fn tickLFSR(self: *Apu) void {
+    const new_bit: u1 = @truncate(~(self.CH4_LFSR ^ (self.CH4_LFSR >> 1)));
+    self.CH4_LFSR = (self.CH4_LFSR & 0x7FFF) | (@as(u16, new_bit) << 15);
+    if (self.rAUD4POLY.LFSR_width == .seven_bit) {
+        self.CH4_LFSR = (self.CH4_LFSR & 0xFF7F) | (@as(u16, new_bit) << 7);
+    }
+    self.CH4_LFSR >>= 1;
 }
 
 fn clockLength(self: *Apu) void {
