@@ -28,6 +28,9 @@ rAUDVOL: r.AUDVOL = .{},
 rAUDTERM: r.AUDTERM = .{},
 rAUDENA: r.AUDENA = .{},
 
+cycles: u16,
+sample_buffer: [512 * 2]f32 = undefined,
+
 pub fn init(bus: *Bus) Apu {
     return Apu{ .bus = bus };
 }
@@ -89,4 +92,8 @@ pub fn write(self: *Apu, addr: u16, val: u8) void {
         0xFF30...0xFF4F => {},
         else => unreachable,
     }
+}
+
+pub fn tick(self: *Apu, cycles: u16) void {
+    self.cycles += cycles;
 }

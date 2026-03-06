@@ -83,3 +83,20 @@ pub fn execAdd8(
     cpu.set_h(halfCarryAdd(@truncate(op1), @truncate(op2), carry));
     cpu.set_c(r1[1] == 1 or r2[1] == 1);
 }
+
+pub const new_ADD_A_r8 = packed struct(u8) {
+    operand: u3,
+    _unused: u5,
+
+    pub fn execute(self: *new_ADD_A_r8, cpu: *Cpu) void {
+        execAdd8(cpu, 7, Cpu.set8, cpu.AF.getHi(), cpu.get8(self.operand), true);
+    }
+};
+
+const five_three = packed struct(u8) {
+    operand: u3,
+    opcode: u5,
+};
+
+const instruction: Instruction = .{instruction};
+instruction.execute();
