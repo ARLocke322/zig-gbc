@@ -32,6 +32,8 @@ CH1_volume: u4 = 0,
 CH2_volume: u4 = 0,
 CH4_volume: u4 = 0,
 
+CH1_sweep_timer: u3,
+
 CH1_envelope_timer: u3,
 CH2_envelope_timer: u3,
 CH4_envelope_timer: u3,
@@ -140,6 +142,7 @@ fn clockLength(self: *Apu) void {
     }
 }
 
+// Ignore for now
 fn clockLengthChannel(
     length_enable: bool,
     timer: *u8,
@@ -171,6 +174,29 @@ fn clockEnvelopeChannel(
                 channel_volume.* += 1
             else if (ENV.*.env_dir == .decreasing and channel_volume.* > 0)
                 channel_volume.* -= 1;
+        }
+    }
+}
+
+fn clockSweep(self: *Apu) void {
+    const current_period: u11 =
+        @as(u11, self.rAUD1HIGH.period) << 8 | self.rAUD1LOW.period;
+
+    const step = self.rAUD1SWEEP.individual_step;
+
+    const new_period = if (self.rAUD1SWEEP.direction == .increasing)
+        @addWithOverflow(current_period, current_period >> step)
+    else
+        .{ current_period -| (current_period >> step), @as(u1, 0) };
+
+    if (new_period[1] == 1) self.rAUDENA.CH1_on = false;
+
+    if (self.rAUD1SWEEP.pace != 0) {
+        self.CH1_sweep_timer -= 1;
+        if (self.CH1_sweep_timer == 0) {
+            self.CH1_sweep_timer = self.rAUD1SWEEP.pace;
+            self.rAUD1HIGH.period = @truncate(new_period[0] >> 8);
+            self.rAUD1LOW.period = @truncate(new_period[0]);
         }
     }
 }

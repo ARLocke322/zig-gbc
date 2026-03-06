@@ -87,7 +87,9 @@ pub const ENV = packed struct(u8) {
     env_dir: enum(u1) { decreasing, increasing } = .decreasing,
     initial_volume: u4 = 0,
 };
-const LOW: u8 = 0;
+pub const LOW = packed struct(u8) {
+    period: u8 = 0,
+};
 pub const HIGH = packed struct(u8) {
     period: u3 = 0,
     _unused: u3 = 0,
