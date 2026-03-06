@@ -78,17 +78,19 @@ pub const AUDENA = packed struct(u8) {
 };
 
 // --- Repeated structs ---
-const LEN = packed struct(u8) {
+pub const LEN = packed struct(u8) {
     initial_length_timer: u6 = 0,
     wave_duty: u2 = 0,
 };
-const ENV = packed struct(u8) {
+pub const ENV = packed struct(u8) {
     sweep_pace: u3 = 0,
     env_dir: enum(u1) { decreasing, increasing } = .decreasing,
     initial_volume: u4 = 0,
 };
-const LOW: u8 = 0;
-const HIGH = packed struct(u8) {
+pub const LOW = packed struct(u8) {
+    period: u8 = 0,
+};
+pub const HIGH = packed struct(u8) {
     period: u3 = 0,
     _unused: u3 = 0,
     length_enable: bool = false,
