@@ -17,12 +17,13 @@ pub const Window = struct {
     window: *SDL.SDL_Window,
     renderer: *SDL.SDL_Renderer,
     texture: *SDL.SDL_Texture,
+    audio_stream: *SDL.SDL_AudioStream,
     file_rom_path: [std.fs.max_path_bytes]u8 = undefined,
     file_rom_path_len: usize = 0,
     file_dialog_cancelled: bool = false,
 
     pub fn init() Window {
-        if (!SDL.SDL_Init(SDL.SDL_INIT_VIDEO)) sdlPanic();
+        if (!SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_AUDIO)) sdlPanic();
 
         const window = SDL.SDL_CreateWindow(
             "Game Boy",
@@ -41,10 +42,24 @@ pub const Window = struct {
             HEIGHT,
         ) orelse sdlPanic();
 
+        const src_spec = SDL.SDL_AudioSpec{
+            .format = SDL.SDL_AUDIO_F32,
+            .channels = 2,
+            .freq = 48000,
+        };
+        const audio_stream = SDL.SDL_OpenAudioDeviceStream(
+            SDL.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+            &src_spec,
+            null,
+            null,
+        ) orelse sdlPanic();
+        _ = SDL.SDL_ResumeAudioStreamDevice(audio_stream);
+
         return Window{
             .window = window,
             .renderer = renderer,
             .texture = texture,
+            .audio_stream = audio_stream,
         };
     }
 
@@ -88,6 +103,14 @@ pub const Window = struct {
                 var frame_cycles: u64 = 0;
                 while (frame_cycles < CYCLES_PER_FRAME) {
                     frame_cycles += try gb.step() * 4;
+                    if (gb.apu.sample_ready) {
+                        gb.apu.sample_ready = false;
+                        _ = SDL.SDL_PutAudioStreamData(
+                            self.audio_stream,
+                            &gb.apu.sample_buffer,
+                            1024 * @sizeOf(f32),
+                        );
+                    }
                 }
             }
             _ = SDL.SDL_UpdateTexture(

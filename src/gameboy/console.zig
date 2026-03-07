@@ -4,6 +4,7 @@ const Bus = @import("bus.zig").Bus;
 const Cartridge = @import("../cartridge/MBC1.zig").MBC1;
 const Timer = @import("timer.zig").Timer;
 const InterruptController = @import("interrupt_controller.zig").InterruptController;
+const Apu = @import("apu/apu.zig").Apu;
 const std = @import("std");
 
 pub const Console = @This();
@@ -13,6 +14,7 @@ timer: *Timer,
 bus: *Bus,
 cpu: *Cpu,
 ppu: *Ppu,
+apu: *Apu,
 
 // Creates a Console struct with pointers to various components
 pub fn init(
@@ -21,6 +23,7 @@ pub fn init(
     bus: *Bus,
     cpu: *Cpu,
     ppu: *Ppu,
+    apu: *Apu,
 ) Console {
     return Console{
         .interrupt_controller = interrupt_controller,
@@ -28,6 +31,7 @@ pub fn init(
         .bus = bus,
         .cpu = cpu,
         .ppu = ppu,
+        .apu = apu,
     };
 }
 
@@ -69,6 +73,8 @@ pub fn step(
     // Ticks components by number of cycles taken (converted to t cycles)
     self.timer.tick(total_cycles * 4);
     self.ppu.tick(self.cpu, self.bus, total_cycles * 4);
+
+    self.apu.tick(total_cycles * 4);
 
     return total_cycles;
 }
