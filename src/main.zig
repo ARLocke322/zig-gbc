@@ -3,6 +3,7 @@ const Console = @import("./gameboy/console.zig").Console;
 const Cpu = @import("./gameboy/cpu.zig").Cpu;
 const Bus = @import("./gameboy/bus.zig").Bus;
 const Ppu = @import("./gameboy/ppu.zig").Ppu;
+const Apu = @import("./gameboy/apu/apu.zig").Apu;
 const Timer = @import("./gameboy/timer.zig").Timer;
 const Joypad = @import("./gameboy/joypad.zig").Joypad;
 const Window = @import("./gui/window.zig").Window;
@@ -57,12 +58,17 @@ pub fn main(init: std.process.Init) !void {
     var timer = Timer.init(&interrupt_controller);
     var ppu = Ppu.init(&interrupt_controller, cgb);
     var joypad = Joypad.init();
-    var bus = Bus.init(&cart, &timer, &interrupt_controller, &ppu, &joypad, cgb);
+
+    var apu = Apu.init();
+    const audio_stream_buffer = try allocator.alloc(f32, 1024);
+    defer allocator.free(audio_stream_buffer);
+
+    var bus = Bus.init(&cart, &timer, &interrupt_controller, &ppu, &apu, &joypad, cgb);
     var cpu = Cpu.init(&bus, &interrupt_controller, cgb);
     bus.cpu = &cpu;
 
     // Initialise console
-    var gb = Console.init(&interrupt_controller, &timer, &bus, &cpu, &ppu);
+    var gb = Console.init(&interrupt_controller, &timer, &bus, &cpu, &ppu, &apu);
 
     try window.run(&gb);
 
