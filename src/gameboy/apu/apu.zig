@@ -1,50 +1,15 @@
 const assert = @import("std").debug.assert;
 const std = @import("std");
 const r = @import("apu_registers.zig");
+const Channel1 = @import("channel_1.zig").Channel1;
+const Channel2 = @import("channel_2.zig").Channel2;
+const Channel3 = @import("channel_3.zig").Channel3;
+const Channel4 = @import("channel_4.zig").Channel4;
 pub const Apu = @This();
 
-rAUD1SWEEP: r.AUD1SWEEP = .{},
-rAUD1LEN: r.AUD1LEN = .{},
-rAUD1ENV: r.AUD1ENV = .{},
-rAUD1LOW: r.AUD1LOW = .{},
-rAUD1HIGH: r.AUD1HIGH = .{},
-rAUD2LEN: r.AUD2LEN = .{},
-rAUD2ENV: r.AUD2ENV = .{},
-rAUD2LOW: r.AUD2LOW = .{},
-rAUD2HIGH: r.AUD2HIGH = .{},
-rAUD3ENA: r.AUD3ENA = .{},
-rAUD3LEN: r.AUD3LEN = .{},
-rAUD3LEVEL: r.AUD3LEVEL = .{},
-rAUD3LOW: r.AUD3LOW = .{},
-rAUD3HIGH: r.AUD3HIGH = .{},
-rAUD4LEN: r.AUD4LEN = .{},
-rAUD4ENV: r.AUD4ENV = .{},
-rAUD4POLY: r.AUD4POLY = .{},
-rAUD4GO: r.AUD4GO = .{},
 rAUDVOL: r.AUDVOL = .{},
 rAUDTERM: r.AUDTERM = .{},
 rAUDENA: r.AUDENA = .{},
-
-CH1_volume: u4 = 0,
-CH2_volume: u4 = 0,
-CH4_volume: u4 = 0,
-
-CH1_sweep_timer: u3 = 0,
-CH1_sweep_shadow_period: u11 = 0,
-
-CH1_envelope_timer: u3 = 0,
-CH2_envelope_timer: u3 = 0,
-CH4_envelope_timer: u3 = 0,
-
-CH1_frequency_timer: u14 = 1,
-CH2_frequency_timer: u14 = 1,
-CH3_frequency_timer: u13 = 1,
-CH4_frequency_timer: u22 = 1,
-
-CH1_waveform_position: u3 = 0,
-CH2_waveform_position: u3 = 0,
-CH3_waveform_position: u5 = 0,
-CH4_LFSR: u16 = 0,
 
 cycles: u16 = 0,
 sample_point_cycles: u16 = 0,
@@ -56,6 +21,11 @@ wave_ram: [16]u8,
 
 sample_ready: bool = false,
 
+channel_1: *Channel1,
+channel_2: *Channel2,
+channel_3: *Channel3,
+channel_4: *Channel4,
+
 const duty_patterns = [4][8]u1{
     .{ 0, 0, 0, 0, 0, 0, 0, 1 },
     .{ 0, 0, 0, 0, 0, 0, 1, 1 },
@@ -63,32 +33,43 @@ const duty_patterns = [4][8]u1{
     .{ 1, 1, 1, 1, 1, 1, 0, 0 },
 };
 
-pub fn init() Apu {
-    return .{ .wave_ram = [_]u8{0} ** 16 };
+pub fn init(
+    channel_1: *Channel1,
+    channel_2: *Channel2,
+    channel_3: *Channel3,
+    channel_4: *Channel4,
+) Apu {
+    return .{
+        .channel_1 = channel_1,
+        .channel_2 = channel_2,
+        .channel_3 = channel_3,
+        .channel_4 = channel_4,
+        .wave_ram = [_]u8{0} ** 16,
+    };
 }
 
 pub fn read(self: *Apu, addr: u16) u8 {
     assert((addr >= 0xFF10 and addr <= 0xFF26) or
         (addr >= 0xFF30 and addr <= 0xFF3F));
     return switch (addr) {
-        0xFF10 => @as(u8, @bitCast(self.rAUD1SWEEP)) | 0x80,
-        0xFF11 => @as(u8, @bitCast(self.rAUD1LEN)) | 0x3F, // only bits 6, 7 readable
-        0xFF12 => @bitCast(self.rAUD1ENV),
+        0xFF10 => @as(u8, @bitCast(self.channel_1.SWEEP)) | 0x80,
+        0xFF11 => @as(u8, @bitCast(self.channel_1.LEN)) | 0x3F, // only bits 6, 7 readable
+        0xFF12 => @bitCast(self.channel_1.ENV),
         0xFF13 => 0xFF, // write only
-        0xFF14 => @as(u8, @bitCast(self.rAUD1HIGH)) | 0xBF, // only bit 6 readable
-        0xFF16 => @as(u8, @bitCast(self.rAUD2LEN)) | 0x3F,
-        0xFF17 => @bitCast(self.rAUD2ENV),
+        0xFF14 => @as(u8, @bitCast(self.channel_1.HIGH)) | 0xBF, // only bit 6 readable
+        0xFF16 => @as(u8, @bitCast(self.channel_2.LEN)) | 0x3F,
+        0xFF17 => @bitCast(self.channel_2.ENV),
         0xFF18 => 0xFF,
-        0xFF19 => @as(u8, @bitCast(self.rAUD2HIGH)) | 0xBF,
-        0xFF1A => @as(u8, @bitCast(self.rAUD3ENA)) | 0x7F,
+        0xFF19 => @as(u8, @bitCast(self.channel_2.HIGH)) | 0xBF,
+        0xFF1A => @as(u8, @bitCast(self.channel_3.ENA)) | 0x7F,
         0xFF1B => 0xFF, // write only
-        0xFF1C => @as(u8, @bitCast(self.rAUD3LEVEL)) | 0x9F,
+        0xFF1C => @as(u8, @bitCast(self.channel_3.LEVEL)) | 0x9F,
         0xFF1D => 0xFF, // write only
-        0xFF1E => @as(u8, @bitCast(self.rAUD3HIGH)) | 0xBF, // only bit 6 readable
+        0xFF1E => @as(u8, @bitCast(self.channel_3.HIGH)) | 0xBF, // only bit 6 readable
         0xFF20 => 0xFF, // write only
-        0xFF21 => @bitCast(self.rAUD4ENV),
-        0xFF22 => @bitCast(self.rAUD4POLY),
-        0xFF23 => @as(u8, @bitCast(self.rAUD4GO)) | 0xBF, // only bit 6 readable
+        0xFF21 => @bitCast(self.channel_4.ENV),
+        0xFF22 => @bitCast(self.channel_4.POLY),
+        0xFF23 => @as(u8, @bitCast(self.channel_4.GO)) | 0xBF, // only bit 6 readable
         0xFF24 => @bitCast(self.rAUDVOL),
         0xFF25 => @bitCast(self.rAUDTERM),
         0xFF26 => @as(u8, @bitCast(self.rAUDENA)) | 0x70,
@@ -101,74 +82,42 @@ pub fn write(self: *Apu, addr: u16, val: u8) void {
     assert((addr >= 0xFF10 and addr <= 0xFF26) or
         (addr >= 0xFF30 and addr <= 0xFF3F));
     switch (addr) {
-        0xFF10 => self.rAUD1SWEEP = @bitCast(val),
-        0xFF11 => self.rAUD1LEN = @bitCast(val),
-        0xFF12 => self.rAUD1ENV = @bitCast(val),
-        0xFF13 => self.rAUD1LOW = @bitCast(val),
+        0xFF10 => self.channel_1.SWEEP = @bitCast(val),
+        0xFF11 => self.channel_1.LEN = @bitCast(val),
+        0xFF12 => self.channel_1.ENV = @bitCast(val),
+        0xFF13 => self.channel_1.LOW = @bitCast(val),
         0xFF14 => {
-            self.rAUD1HIGH = @bitCast(val);
-            if (self.rAUD1HIGH.trigger) {
-                self.rAUDENA.CH1_on = true;
-                const current_period = @as(u11, self.rAUD1HIGH.period) << 8 | self.rAUD1LOW.period;
-                self.CH1_frequency_timer = (2048 - @as(u14, current_period)) * 4;
-                self.CH1_envelope_timer = self.rAUD1ENV.sweep_pace;
-                self.CH1_volume = self.rAUD1ENV.initial_volume;
-                self.CH1_sweep_timer = self.rAUD1SWEEP.pace;
-                self.CH1_sweep_shadow_period = current_period;
-
-                if (self.rAUD1SWEEP.individual_step != 0) {
-                    const delta = self.CH1_sweep_shadow_period >> self.rAUD1SWEEP.individual_step;
-                    if (self.rAUD1SWEEP.direction == .increasing and
-                        @as(u12, self.CH1_sweep_shadow_period) + delta > 0x7FF)
-                    {
-                        self.rAUDENA.CH1_on = false;
-                    }
-                }
+            self.channel_1.HIGH = @bitCast(val);
+            if (self.channel_1.HIGH.trigger) {
+                self.channel_1.handleTrigger(&self.rAUDENA);
             }
         },
-        0xFF16 => self.rAUD2LEN = @bitCast(val),
-        0xFF17 => self.rAUD2ENV = @bitCast(val),
-        0xFF18 => self.rAUD2LOW = @bitCast(val),
+        0xFF16 => self.channel_2.LEN = @bitCast(val),
+        0xFF17 => self.channel_2.ENV = @bitCast(val),
+        0xFF18 => self.channel_2.LOW = @bitCast(val),
         0xFF19 => {
-            self.rAUD2HIGH = @bitCast(val);
-            if (self.rAUD2HIGH.trigger) {
-                const current_period = @as(u11, self.rAUD2HIGH.period) << 8 | self.rAUD2LOW.period;
-                self.rAUDENA.CH2_on = true;
-                self.CH2_frequency_timer = (2048 - @as(u14, current_period)) * 4;
-                self.CH2_envelope_timer = self.rAUD2ENV.sweep_pace;
-                self.CH2_volume = self.rAUD2ENV.initial_volume;
+            self.channel_2.HIGH = @bitCast(val);
+            if (self.channel_2.HIGH.trigger) {
+                self.channel_2.handleTrigger(&self.rAUDENA);
             }
         },
-        0xFF1A => self.rAUD3ENA = @bitCast(val),
-        0xFF1B => self.rAUD3LEN = @bitCast(val),
-        0xFF1C => self.rAUD3LEVEL = @bitCast(val),
-        0xFF1D => self.rAUD3LOW = @bitCast(val),
+        0xFF1A => self.channel_3.ENA = @bitCast(val),
+        0xFF1B => self.channel_3.LEN = @bitCast(val),
+        0xFF1C => self.channel_3.LEVEL = @bitCast(val),
+        0xFF1D => self.channel_3.LOW = @bitCast(val),
         0xFF1E => {
-            self.rAUD3HIGH = @bitCast(val);
-            if (self.rAUD3HIGH.trigger) {
-                self.rAUDENA.CH3_on = true;
-                const current_period = @as(u11, self.rAUD3HIGH.period) << 8 | self.rAUD3LOW.period;
-                self.CH3_frequency_timer = (2048 - @as(u13, current_period)) * 2;
-
-                self.CH3_waveform_position = 0;
+            self.channel_3.HIGH = @bitCast(val);
+            if (self.channel_3.HIGH.trigger) {
+                self.channel_3.handleTrigger(&self.rAUDENA);
             }
         },
-        0xFF20 => self.rAUD4LEN = @bitCast(val),
-        0xFF21 => self.rAUD4ENV = @bitCast(val),
-        0xFF22 => self.rAUD4POLY = @bitCast(val),
+        0xFF20 => self.channel_4.LEN = @bitCast(val),
+        0xFF21 => self.channel_4.ENV = @bitCast(val),
+        0xFF22 => self.channel_4.POLY = @bitCast(val),
         0xFF23 => {
-            self.rAUD4GO = @bitCast(val);
-            if (self.rAUD4GO.trigger) {
-                self.rAUDENA.CH4_on = true;
-                const divisor: u22 = if (self.rAUD4POLY.clock_divider == 0)
-                    8
-                else
-                    @as(u22, self.rAUD4POLY.clock_divider) * 16;
-                self.CH4_frequency_timer = divisor << self.rAUD4POLY.clock_shift;
-                self.CH4_envelope_timer = self.rAUD4ENV.sweep_pace;
-                self.CH4_volume = self.rAUD4ENV.initial_volume;
-
-                self.CH4_LFSR = 0xFFFF;
+            self.channel_4.GO = @bitCast(val);
+            if (self.channel_4.GO.trigger) {
+                self.channel_4.handleTrigger(&self.rAUDENA);
             }
         },
         0xFF24 => self.rAUDVOL = @bitCast(val),
@@ -192,7 +141,7 @@ pub fn tick(self: *Apu, cycles: u16) void {
             self.clockEnvelope();
         }
         if (self.frame_sequencer_step == 2 or self.frame_sequencer_step == 6) {
-            self.clockSweep();
+            self.channel_1.clockSweep(&self.rAUDENA);
         }
         self.frame_sequencer_step +%= 1;
     }
@@ -215,31 +164,31 @@ fn generateSample(self: *Apu) bool {
     var CH4_output: u4 = 0;
 
     if (self.rAUDENA.audio_on) {
-        CH1_output = if (duty_patterns[self.rAUD1LEN.wave_duty][self.CH1_waveform_position] == 1 and
+        CH1_output = if (duty_patterns[self.channel_1.LEN.wave_duty][self.channel_1.waveform_position] == 1 and
             self.rAUDENA.CH1_on)
-            self.CH1_volume
+            self.channel_1.volume
         else
             0;
 
-        CH2_output = if (duty_patterns[self.rAUD2LEN.wave_duty][self.CH2_waveform_position] == 1 and
+        CH2_output = if (duty_patterns[self.channel_2.LEN.wave_duty][self.channel_2.waveform_position] == 1 and
             self.rAUDENA.CH2_on)
-            self.CH2_volume
+            self.channel_2.volume
         else
             0;
 
-        const byte: u8 = self.wave_ram[self.CH3_waveform_position >> 1]; // >> 1 = / 2, as 2 nibbles per byte
-        const nibble: u4 = if (self.CH3_waveform_position & 1 == 0)
+        const byte: u8 = self.wave_ram[self.channel_3.waveform_position >> 1]; // >> 1 = / 2, as 2 nibbles per byte
+        const nibble: u4 = if (self.channel_3.waveform_position & 1 == 0)
             @truncate(byte >> 4)
         else
             @truncate(byte);
 
         CH3_output = if (self.rAUDENA.CH3_on)
-            getCH3Sample(nibble, self.rAUD3LEVEL.output_level)
+            getCH3Sample(nibble, self.channel_3.LEVEL.output_level)
         else
             0;
 
-        const LFSR_bit_0: u1 = @truncate(self.CH4_LFSR);
-        CH4_output = if (LFSR_bit_0 == 0 and self.rAUDENA.CH4_on) self.CH4_volume else 0;
+        const LFSR_bit_0: u1 = @truncate(self.channel_4.LFSR);
+        CH4_output = if (LFSR_bit_0 == 0 and self.rAUDENA.CH4_on) self.channel_4.volume else 0;
     }
 
     return self.mix(CH1_output, CH2_output, CH3_output, CH4_output);
@@ -294,122 +243,22 @@ fn mix(
 
 fn tickFrequencyTimers(self: *Apu, cycles: u16) void {
     for (0..cycles) |_| {
-        self.CH1_frequency_timer -= 1;
-        if (self.CH1_frequency_timer == 0) {
-            self.CH1_frequency_timer = (2048 -
-                (@as(u14, self.rAUD1HIGH.period) << 8 | self.rAUD1LOW.period)) * 4;
-            self.CH1_waveform_position +%= 1;
-        }
-
-        self.CH2_frequency_timer -= 1;
-        if (self.CH2_frequency_timer == 0) {
-            self.CH2_frequency_timer = (2048 -
-                (@as(u14, self.rAUD2HIGH.period) << 8 | self.rAUD2LOW.period)) * 4;
-            self.CH2_waveform_position +%= 1;
-        }
-
-        self.CH3_frequency_timer -= 1;
-        if (self.CH3_frequency_timer == 0) {
-            self.CH3_frequency_timer = (2048 -
-                (@as(u13, self.rAUD3HIGH.period) << 8 | self.rAUD3LOW.period)) * 2;
-            self.CH3_waveform_position +%= 1;
-        }
-
-        self.CH4_frequency_timer -= 1;
-        if (self.CH4_frequency_timer == 0) {
-            const divisor: u22 = if (self.rAUD4POLY.clock_divider == 0)
-                8
-            else
-                @as(u22, self.rAUD4POLY.clock_divider) * 16;
-            self.CH4_frequency_timer = divisor << self.rAUD4POLY.clock_shift;
-            self.tickLFSR();
-        }
+        self.channel_1.tickFrequency();
+        self.channel_2.tickFrequency();
+        self.channel_3.tickFrequency();
+        self.channel_4.tickFrequency();
     }
-}
-
-fn tickLFSR(self: *Apu) void {
-    const new_bit: u1 = @truncate(~(self.CH4_LFSR ^ (self.CH4_LFSR >> 1)));
-    self.CH4_LFSR = (self.CH4_LFSR & 0x7FFF) | (@as(u16, new_bit) << 15);
-    if (self.rAUD4POLY.LFSR_width == .seven_bit) {
-        self.CH4_LFSR = (self.CH4_LFSR & 0xFF7F) | (@as(u16, new_bit) << 7);
-    }
-    self.CH4_LFSR >>= 1;
 }
 
 fn clockLength(self: *Apu) void {
-    if (self.rAUD1HIGH.length_enable) {
-        self.rAUD1LEN.initial_length_timer +%= 1;
-        if (self.rAUD1LEN.initial_length_timer == 0) self.rAUDENA.CH1_on = false;
-    }
-    if (self.rAUD2HIGH.length_enable) {
-        self.rAUD2LEN.initial_length_timer +%= 1;
-        if (self.rAUD2LEN.initial_length_timer == 0) self.rAUDENA.CH2_on = false;
-    }
-    if (self.rAUD3HIGH.length_enable) {
-        self.rAUD3LEN.initial_length_timer +%= 1;
-        if (self.rAUD3LEN.initial_length_timer == 0) self.rAUDENA.CH3_on = false;
-    }
-    if (self.rAUD4GO.length_enable) {
-        self.rAUD4LEN.initial_length_timer +%= 1;
-        if (self.rAUD4LEN.initial_length_timer == 0) self.rAUDENA.CH4_on = false;
-    }
-}
-
-// Ignore for now
-fn clockLengthChannel(
-    length_enable: bool,
-    timer: *u8,
-    channel_on: *bool,
-) void {
-    if (length_enable) {
-        timer.* +%= 1;
-        if (timer.* == 0) channel_on.* = false;
-    }
+    self.channel_1.clockLength(&self.rAUDENA);
+    self.channel_2.clockLength(&self.rAUDENA);
+    self.channel_3.clockLength(&self.rAUDENA);
+    self.channel_4.clockLength(&self.rAUDENA);
 }
 
 fn clockEnvelope(self: *Apu) void {
-    clockEnvelopeChannel(&self.rAUD1ENV, &self.CH1_envelope_timer, &self.CH1_volume);
-    clockEnvelopeChannel(&self.rAUD2ENV, &self.CH2_envelope_timer, &self.CH2_volume);
-    clockEnvelopeChannel(&self.rAUD4ENV, &self.CH4_envelope_timer, &self.CH4_volume);
-}
-
-fn clockEnvelopeChannel(
-    ENV: *r.ENV,
-    envelope_timer: *u3,
-    channel_volume: *u4,
-) void {
-    if (ENV.*.sweep_pace != 0) {
-        envelope_timer.* -%= 1;
-        if (envelope_timer.* == 0) {
-            envelope_timer.* = ENV.*.sweep_pace;
-
-            if (ENV.*.env_dir == .increasing and channel_volume.* < 15)
-                channel_volume.* += 1
-            else if (ENV.*.env_dir == .decreasing and channel_volume.* > 0)
-                channel_volume.* -= 1;
-        }
-    }
-}
-
-fn clockSweep(self: *Apu) void {
-    const current_period: u11 = self.CH1_sweep_shadow_period;
-
-    const step = self.rAUD1SWEEP.individual_step;
-
-    const new_period = if (self.rAUD1SWEEP.direction == .increasing)
-        @addWithOverflow(current_period, current_period >> step)
-    else
-        .{ current_period -| (current_period >> step), @as(u1, 0) };
-
-    if (new_period[1] == 1) self.rAUDENA.CH1_on = false;
-
-    if (self.rAUD1SWEEP.pace != 0) {
-        self.CH1_sweep_timer -%= 1;
-        if (self.CH1_sweep_timer == 0) {
-            self.CH1_sweep_timer = self.rAUD1SWEEP.pace;
-            self.rAUD1HIGH.period = @truncate(new_period[0] >> 8);
-            self.rAUD1LOW.period = @truncate(new_period[0]);
-            self.CH1_sweep_shadow_period = new_period[0];
-        }
-    }
+    self.channel_1.clockEnvelope();
+    self.channel_2.clockEnvelope();
+    self.channel_4.clockEnvelope();
 }
