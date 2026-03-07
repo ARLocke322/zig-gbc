@@ -4,6 +4,10 @@ const Cpu = @import("./gameboy/cpu.zig").Cpu;
 const Bus = @import("./gameboy/bus.zig").Bus;
 const Ppu = @import("./gameboy/ppu.zig").Ppu;
 const Apu = @import("./gameboy/apu/apu.zig").Apu;
+const Channel1 = @import("./gameboy/apu/channel_1.zig").Channel1;
+const Channel2 = @import("./gameboy/apu/channel_2.zig").Channel2;
+const Channel3 = @import("./gameboy/apu/channel_3.zig").Channel3;
+const Channel4 = @import("./gameboy/apu/channel_4.zig").Channel4;
 const Timer = @import("./gameboy/timer.zig").Timer;
 const Joypad = @import("./gameboy/joypad.zig").Joypad;
 const Window = @import("./gui/window.zig").Window;
@@ -59,7 +63,11 @@ pub fn main(init: std.process.Init) !void {
     var ppu = Ppu.init(&interrupt_controller, cgb);
     var joypad = Joypad.init();
 
-    var apu = Apu.init();
+    var channel_1: Channel1 = .{};
+    var channel_2: Channel2 = .{};
+    var channel_3: Channel3 = .{};
+    var channel_4: Channel4 = .{};
+    var apu = Apu.init(&channel_1, &channel_2, &channel_3, &channel_4);
     const audio_stream_buffer = try allocator.alloc(f32, 1024);
     defer allocator.free(audio_stream_buffer);
 
