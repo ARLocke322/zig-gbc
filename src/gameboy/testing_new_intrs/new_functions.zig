@@ -90,11 +90,21 @@ pub fn execAdd16Signed(
 }
 
 pub fn execLoad16(
-    ctx: anytype,
-    set: *const fn (@TypeOf(ctx), u16) void,
+    cpu: *Cpu,
+    dest_idx: u2,
+    set: *const fn (*Cpu, u2, u16) void,
     val: u16,
 ) void {
-    set(ctx, val);
+    set(cpu, dest_idx, val);
+}
+
+pub fn execLoad8(
+    cpu: *Cpu,
+    dest_idx: u3,
+    set: *const fn (*Cpu, u3, u8) void,
+    val: u8,
+) void {
+    set(cpu, dest_idx, val);
 }
 
 pub fn execInc16(
@@ -144,8 +154,8 @@ pub fn execDec8(
 
 pub fn execRotateLeft(
     cpu: *Cpu,
-    ctx: anytype,
-    set: *const fn (@TypeOf(ctx), u8) void,
+    dest_idx: u3,
+    set: *const fn (*Cpu, u3, u8) void,
     current: u8,
     useCarry: bool,
 ) void {
@@ -154,7 +164,7 @@ pub fn execRotateLeft(
 
     const result: u8 = @as(u8, current) << 1 | new_bit_0;
 
-    set(ctx, result);
+    set(cpu, dest_idx, result);
 
     cpu.set_z(result == 0);
     cpu.set_n(false);
@@ -164,8 +174,8 @@ pub fn execRotateLeft(
 
 pub fn execRotateRight(
     cpu: *Cpu,
-    ctx: anytype,
-    set: *const fn (@TypeOf(ctx), u8) void,
+    dest_idx: u3,
+    set: *const fn (*Cpu, u3, u8) void,
     current: u8,
     useCarry: bool,
 ) void {
@@ -174,12 +184,50 @@ pub fn execRotateRight(
 
     const result: u8 = @as(u8, new_bit_7) << 7 | (current >> 1);
 
-    set(ctx, result);
+    set(cpu, dest_idx, result);
 
     cpu.set_z(result == 0);
     cpu.set_n(false);
     cpu.set_h(false);
     cpu.set_c(new_carry == 1);
+}
+
+pub fn execDAA(
+    cpu: *Cpu,
+) void {
+    var adjustment: u8 = 0;
+    const current: u8 = cpu.AF.getHi();
+    if (cpu.get_n() == 1) {
+        if (cpu.get_h() == 1) adjustment = 0x6;
+        if (cpu.get_c() == 1) adjustment += 0x60;
+        cpu.AF.setHi(current -% adjustment);
+    } else {
+        if (cpu.get_h() == 1 or (current & 0xF) > 0x9) adjustment = 0x6;
+        if (cpu.get_c() == 1 or current > 0x99) {
+            adjustment += 0x60;
+            cpu.set_c(true);
+        }
+        cpu.AF.setHi(current +% adjustment);
+    }
+
+    cpu.set_z(cpu.AF.getHi() == 0);
+    cpu.set_h(false);
+}
+pub fn execCPL(cpu: *Cpu) void {
+    cpu.AF.setHi(~cpu.AF.getHi());
+    cpu.set_n(true);
+    cpu.set_h(true);
+}
+pub fn execSCF(cpu: *Cpu) void {
+    cpu.set_n(false);
+    cpu.set_h(false);
+    cpu.set_c(true);
+}
+pub fn execCCF(cpu: *Cpu) void {
+    cpu.set_n(false);
+    cpu.set_h(false);
+    cpu.set_c(cpu.get_c() == 0);
+    return 1;
 }
 
 pub fn execJump(cpu: *Cpu, val: u16) void {
