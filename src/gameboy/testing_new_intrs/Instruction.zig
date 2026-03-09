@@ -56,7 +56,8 @@ pub fn set8(self: *Cpu, register_idx: u3, value: u8) void {
 
 pub const five_three = packed struct(u8) {
     operand: u3,
-    opcode: u5,
+    op: u3,
+    prefix: u2,
 
     pub fn execute(self: *five_three, cpu: *Cpu) void {
         switch (self.opcode) {
