@@ -9,7 +9,6 @@
 - [ ] Refactor CPU instruction interface
 - [ ] Refactor component registers into packed structs
 - [ ] Timer Falling Edge
-- [ ] Refactor audio channels into their own structs
 
 ## Tests
 
@@ -50,3 +49,4 @@
 - [x] CGB
 - [x] rom selection / show file dialog
 - [x] MBC5
+- [x] Refactor audio channels into their own structs
