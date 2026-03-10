@@ -35,14 +35,7 @@ pub const Block3 = packed struct(u8) {
                 0x5 => x.execJump(cpu, cpu.HL.getHiLo()),
                 0x7 => cpu.SP.set(cpu.HL.getHiLo()),
             },
-            0x2 => switch (self.y) {
-                0x0...0x3 => if (check_cond(cpu, @truncate(self.y)))
-                    x.execJump(cpu, cpu.pc_pop_16()),
-                0x4 => cpu.mem.write8((0xFF00 | @as(u16, cpu.BC.getLo())), cpu.AF.getHi()),
-                0x5 => cpu.mem.write8(cpu.pc_pop_16(), cpu.AF.getHi()),
-                0x6 => cpu.AF.setHi(cpu.mem.read8((0xFF00) | @as(u16, cpu.BC.getLo()))),
-                0x7 => cpu.AF.setHi(cpu.mem.read8(cpu.pc_pop_16())),
-            },
+            0x2 => @as(JumpLoadOp, @bitCast(self)).execute(cpu),
             0x3 => switch (self.y) {
                 0x0 => x.execJump(cpu, cpu.pc_pop_16()),
                 0x1 => @as(Cb, @bitCast(cpu.pc_pop_8())).execute(cpu),
@@ -50,8 +43,10 @@ pub const Block3 = packed struct(u8) {
                 0x7 => cpu.IME_scheduled = false, // DI
                 else => {},
             },
-            0x4 => if (self.y < 4 and check_cond(cpu, @truncate(self.y)))
-                x.execCall(cpu, cpu.pc_pop_16()),
+            0x4 => if (self.y < 4) {
+                const addr = cpu.pc_pop_16();
+                if (check_cond(cpu, @truncate(self.y))) x.execCall(cpu, addr);
+            },
             0x5 => if (self.y & 1 == 0) {
                 const reg: R16stk = @bitCast(self.y >> 1);
                 cpu.sp_push_16(cpu.getR16stk(reg));
@@ -62,7 +57,7 @@ pub const Block3 = packed struct(u8) {
     }
 };
 
-pub const JumpLoadOp = packed struct(u8) {
+const JumpLoadOp = packed struct(u8) {
     _unused: u3,
     opcode: enum(u2) { LDH_C_A = 0, LD_n16_A = 1, LDH_A_C = 2, LD_A_n16 = 3 },
     is_ld: bool,
@@ -71,10 +66,16 @@ pub const JumpLoadOp = packed struct(u8) {
     fn execute(self: JumpLoadOp, cpu: *Cpu) void {
         if (self.is_ld) {
             switch (self.opcode) {
-                .LDH_C_A => {},
-                .LD_n16_A => {},
-                .LDH_A_C => {},
-                .LD_A_n16 => {},
+                .LDH_C_A => {
+                    const addr: u16 = 0xFF00 | @as(u16, cpu.BC.getLo());
+                    cpu.mem.write8(addr, cpu.AF.getHi());
+                },
+                .LD_n16_A => cpu.mem.write8(cpu.pc_pop_16(), cpu.AF.getHi()),
+                .LDH_A_C => {
+                    const addr: u16 = 0xFF00 | @as(u16, cpu.BC.getLo());
+                    cpu.AF.setHi(cpu.mem.read8(addr));
+                },
+                .LD_A_n16 => cpu.AF.setHi(cpu.mem.read8(cpu.pc_pop_16())),
             }
         } else {
             const cond: u2 = @bitCast(self.opcode);
