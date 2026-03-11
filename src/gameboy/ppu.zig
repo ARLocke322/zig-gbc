@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const InterruptController = @import("interrupt_controller.zig").InterruptController;
-const Cpu = @import("cpu.zig").Cpu;
+const Cpu = @import("./cpu/cpu.zig").Cpu;
 const Bus = @import("bus.zig").Bus;
 const renderScanlineDmg = @import("render_dmg.zig").renderScanlineDmg;
 const renderScanlineCgb = @import("render_cgb.zig").renderScanlineCgb;
@@ -63,6 +63,8 @@ pub const Ppu = struct {
     bg_idx: [160]u2,
     bg_palettes: [8][4]u32 = undefined,
     obj_palettes: [8][4]u32 = undefined,
+
+    frame_ready: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 
     pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
         return Ppu{
@@ -278,6 +280,7 @@ pub const Ppu = struct {
             if (self.ly == 144) {
                 self.set_ppu_mode(1);
                 self.interrupt_controller.request(InterruptController.VBLANK);
+                self.frame_ready.store(true, .release);
             } else self.set_ppu_mode(2);
 
             self.handle_stat_interrupt();

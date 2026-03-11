@@ -1,10 +1,10 @@
-const Cpu = @import("../cpu.zig").Cpu;
-const Register = @import("../register.zig").Register;
+const Cpu = @import("cpu.zig").Cpu;
+const Register = @import("register.zig").Register;
 const Bus = @import("../bus.zig").Bus;
-const R8 = @import("decode.zig").R8;
-const R16 = @import("decode.zig").R16;
-const R16stk = @import("decode.zig").R16stk;
-const R16mem = @import("decode.zig").R16mem;
+const R8 = @import("register.zig").R8;
+const R16 = @import("register.zig").R16;
+const R16stk = @import("register.zig").R16stk;
+const R16mem = @import("register.zig").R16mem;
 const std = @import("std");
 
 pub fn halfCarryAdd(a: u4, b: u4, c: u1) bool {
@@ -62,7 +62,7 @@ pub fn execSub8(
 pub fn execAdd16(
     cpu: *Cpu,
     dest: R16,
-    set: *const fn (*Cpu, u16) void,
+    set: *const fn (*Cpu, R16, u16) void,
     op1: u16,
     op2: u16,
 ) void {
@@ -242,7 +242,6 @@ pub fn execCCF(cpu: *Cpu) void {
     cpu.set_n(false);
     cpu.set_h(false);
     cpu.set_c(cpu.get_c() == 0);
-    return 1;
 }
 
 pub fn execJump(cpu: *Cpu, val: u16) void {

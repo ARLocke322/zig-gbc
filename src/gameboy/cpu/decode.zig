@@ -174,5 +174,6 @@ pub fn decode(raw_instruction: u8) Instruction {
 
         0xF3 => .DI,
         0xFB => .EI,
+        else => .NOP, // illegal opcodes
     };
 }

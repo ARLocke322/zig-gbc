@@ -5,12 +5,9 @@ const SDL = @cImport({
     @cInclude("SDL3/SDL.h");
 });
 
-var frame_time_ms: u32 = 16; // ~60 FPS, close enough
-// const frame_time_ms: u32 = 1; // ~60 FPS, close enough
 const SCALE = 4;
 const WIDTH = 160;
 const HEIGHT = 144;
-const CYCLES_PER_FRAME: u64 = 70224;
 var turbo: bool = false;
 
 pub const Window = struct {
@@ -50,10 +47,9 @@ pub const Window = struct {
         const audio_stream = SDL.SDL_OpenAudioDeviceStream(
             SDL.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
             &src_spec,
-            null,
-            null,
+            audioCallback,
+            null, // userdata set later
         ) orelse sdlPanic();
-        _ = SDL.SDL_ResumeAudioStreamDevice(audio_stream);
 
         return Window{
             .window = window,
@@ -71,16 +67,14 @@ pub const Window = struct {
     }
 
     pub fn run(self: *Window, gb: *Console) !void {
-        mainLoop: while (true) {
-            const frame_start = SDL.SDL_GetPerformanceCounter();
+        _ = SDL.SDL_SetAudioStreamGetCallback(self.audio_stream, audioCallback, gb);
+        _ = SDL.SDL_ResumeAudioStreamDevice(self.audio_stream);
 
+        mainLoop: while (true) {
             var ev: SDL.SDL_Event = undefined;
             while (SDL.SDL_PollEvent(&ev)) {
                 switch (ev.type) {
-                    SDL.SDL_EVENT_QUIT => {
-                        break :mainLoop;
-                    },
-
+                    SDL.SDL_EVENT_QUIT => break :mainLoop,
                     SDL.SDL_EVENT_KEY_DOWN => {
                         if (ev.key.scancode == SDL.SDL_SCANCODE_S and !ev.key.repeat) {
                             turbo = !turbo;
@@ -88,54 +82,29 @@ pub const Window = struct {
                             setKey(gb.bus.joypad, ev.key.scancode, true);
                         }
                     },
-
                     SDL.SDL_EVENT_KEY_UP => {
                         setKey(gb.bus.joypad, ev.key.scancode, false);
                     },
-
                     else => {},
                 }
             }
 
-            const frames_to_run: u64 = if (turbo) 4 else 1;
-
-            for (0..frames_to_run) |_| {
-                var frame_cycles: u64 = 0;
-                while (frame_cycles < CYCLES_PER_FRAME) {
-                    frame_cycles += try gb.step() * 4;
-                    if (gb.apu.sample_ready) {
-                        gb.apu.sample_ready = false;
-                        _ = SDL.SDL_PutAudioStreamData(
-                            self.audio_stream,
-                            &gb.apu.sample_buffer,
-                            1024 * @sizeOf(f32),
-                        );
-                    }
-                }
+            if (gb.ppu.frame_ready.load(.acquire)) {
+                gb.ppu.frame_ready.store(false, .release);
+                _ = SDL.SDL_UpdateTexture(
+                    self.texture,
+                    null,
+                    @ptrCast(&gb.ppu.display_buffer),
+                    WIDTH * @sizeOf(u32),
+                );
+                _ = SDL.SDL_RenderClear(self.renderer);
+                _ = SDL.SDL_RenderTexture(self.renderer, self.texture, null, null);
+                _ = SDL.SDL_RenderPresent(self.renderer);
             }
-            _ = SDL.SDL_UpdateTexture(
-                self.texture,
-                null,
-                @ptrCast(&gb.ppu.display_buffer),
-                WIDTH * @sizeOf(u32),
-            );
 
-            _ = SDL.SDL_RenderClear(self.renderer);
-            _ = SDL.SDL_RenderTexture(self.renderer, self.texture, null, null);
-            _ = SDL.SDL_RenderPresent(self.renderer);
-
-            const frame_end = SDL.SDL_GetPerformanceCounter();
-            const elapsed_ms: u32 = @intCast(@divFloor(
-                (frame_end - frame_start) * 1000,
-                SDL.SDL_GetPerformanceFrequency(),
-            ));
-
-            if (elapsed_ms < frame_time_ms) {
-                SDL.SDL_Delay(frame_time_ms - elapsed_ms);
-            }
+            SDL.SDL_Delay(1);
         }
     }
-
     pub fn openFileDialog(self: *Window) ![]const u8 {
         var roms_buf: [std.fs.max_path_bytes]u8 = undefined;
         const roms_path = std.c.realpath("./roms", &roms_buf);
@@ -212,3 +181,31 @@ pub const Window = struct {
         self.file_rom_path[path.len] = 0;
     }
 };
+
+fn audioCallback(
+    userdata: ?*anyopaque,
+    stream: ?*SDL.SDL_AudioStream,
+    additional_amount: c_int,
+    _: c_int,
+) callconv(.c) void {
+    const gb: *Console = @ptrCast(@alignCast(userdata orelse return));
+    if (additional_amount <= 0) return;
+
+    const bytes: usize = @intCast(additional_amount);
+    const samples_needed = bytes / (@sizeOf(f32) * 2);
+    var buf: [4096]f32 = undefined;
+    const count = @min(samples_needed, buf.len / 2);
+
+    for (0..count) |i| {
+        gb.stepToSample();
+        buf[i * 2] = gb.apu.left_sample;
+        buf[i * 2 + 1] = gb.apu.right_sample;
+    }
+
+    const byte_count: c_int = @intCast(count);
+    _ = SDL.SDL_PutAudioStreamData(
+        stream,
+        &buf,
+        byte_count * 8, // 2 channels * 4 bytes per f32
+    );
+}
