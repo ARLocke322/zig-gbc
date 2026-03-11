@@ -22,19 +22,7 @@ pub const Block3 = packed struct(u8) {
                 0x6 => cpu.AF.setHi(cpu.mem.read8(0xFF00 || (@as(u16, cpu.pc_pop_8())))),
                 0x7 => x.execAdd16Signed(cpu, .hl, Cpu.set, cpu.SP.getHiLo(), cpu.pc_pop_8()),
             },
-            0x1 => switch (self.y) {
-                0x1 => x.execRet(cpu),
-                0x2, 0x4, 0x6 => {
-                    const reg: R16stk = @bitCast(self.y >> 1);
-                    cpu.setR16stk(reg, cpu.sp_pop_16());
-                },
-                0x3 => {
-                    x.execRet(cpu);
-                    cpu.IME = true;
-                },
-                0x5 => x.execJump(cpu, cpu.HL.getHiLo()),
-                0x7 => cpu.SP.set(cpu.HL.getHiLo()),
-            },
+            0x1 => @as(StackRetOp, @bitCast(self)).execute(),
             0x2 => @as(JumpLoadOp, @bitCast(self)).execute(cpu),
             0x3 => switch (self.y) {
                 0x0 => x.execJump(cpu, cpu.pc_pop_16()),
@@ -57,8 +45,64 @@ pub const Block3 = packed struct(u8) {
     }
 };
 
+const Block3Z0 = packed struct(u8) {
+    _unused: u3 = 0,
+    opcode: enum(u2) { LDH_n8_A = 0, ADD_SP_n8 = 1, LDH_A_n8 = 2, LD_HL_SP_plus_n8 = 3 },
+    is_not_RET: bool,
+    _prefix: u2,
+
+    fn execute(self: Block3Z0, cpu: *Cpu) void {
+        if (self.is_not_RET) {
+            switch (self.opcode) {
+                .LDH_n8_A => {
+                    const addr: u16 = 0xFF00 | @as(u16, cpu.pc_pop_8());
+                    cpu.mem.write8(addr, cpu.AF.getHi());
+                },
+                .ADD_SP_n8 => {
+                    const offset: i8 = @bitCast(cpu.pc_pop_8());
+                    x.execAdd16Signed(cpu, &cpu.SP, Register.set, cpu.SP.getHiLo(), @as(i16, offset));
+                },
+                .LDH_A_n8 => {
+                    const val: u8 = cpu.mem.read8(@as(u16, cpu.pc_pop_8()) | 0xFF00);
+                    cpu.AF.setHi(val);
+                },
+                .LD_HL_SP_plus_n8 => {
+                    const offset: i8 = @bitCast(cpu.pc_pop_8());
+                    x.execAdd16Signed(cpu, &cpu.HL, Register.set, cpu.SP.getHiLo(), @as(i16, offset));
+                },
+            }
+        } else {
+            const cond: u2 = @bitCast(self.opcode);
+            if (check_cond(cpu, cond)) x.execRet(cpu);
+        }
+    }
+};
+
+const StackRetOp = packed struct(u8) {
+    _unused: u3 = 1,
+    is_not_stack_op: bool,
+    opcode: enum(u2) { RET = 0, RETI = 1, JP_HL = 2, LD_SP_HL = 3 },
+
+    fn execute(self: StackRetOp, cpu: *Cpu) void {
+        if (self.is_not_stack_op) {
+            switch (self.opcode) {
+                .RET => x.execRet(cpu),
+                .RETI => {
+                    x.execRet(cpu);
+                    cpu.IME = true;
+                },
+                .JP_HL => x.execJump(cpu, cpu.HL.getHiLo()),
+                .LD_SP_HL => cpu.SP.set(cpu.HL.getHiLo()), // need to fix cycles here
+            }
+        } else {
+            const register: R16stk = @bitCast(self.opcode);
+            cpu.setR16stk(register, cpu.sp_pop_16());
+        }
+    }
+};
+
 const JumpLoadOp = packed struct(u8) {
-    _unused: u3,
+    _unused: u3 = 2,
     opcode: enum(u2) { LDH_C_A = 0, LD_n16_A = 1, LDH_A_C = 2, LD_A_n16 = 3 },
     is_ld: bool,
     _prefix: u2,
