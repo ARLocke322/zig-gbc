@@ -14,12 +14,12 @@ rAUDENA: r.AUDENA = .{},
 cycles: u16 = 0,
 sample_point_cycles: u16 = 0,
 frame_sequencer_step: u3 = 0,
-sample_buffer: [512 * 2]f32 = undefined,
-sample_index: usize = 0,
+sample_ready: bool = false,
 
 wave_ram: [16]u8,
 
-sample_ready: bool = false,
+left_sample: f32 = 0,
+right_sample: f32 = 0,
 
 channel_1: *Channel1,
 channel_2: *Channel2,
@@ -150,14 +150,12 @@ pub fn tick(self: *Apu, cycles: u16) void {
 
     while (self.sample_point_cycles >= 87) {
         self.sample_point_cycles -= 87;
-        if (self.generateSample()) {
-            self.sample_ready = true;
-            return;
-        }
+        self.generateSample();
+        self.sample_ready = true;
     }
 }
 
-fn generateSample(self: *Apu) bool {
+fn generateSample(self: *Apu) void {
     var CH1_output: u4 = 0;
     var CH2_output: u4 = 0;
     var CH3_output: u4 = 0;
@@ -191,7 +189,7 @@ fn generateSample(self: *Apu) bool {
         CH4_output = if (LFSR_bit_0 == 0 and self.rAUDENA.CH4_on) self.channel_4.volume else 0;
     }
 
-    return self.mix(CH1_output, CH2_output, CH3_output, CH4_output);
+    self.mix(CH1_output, CH2_output, CH3_output, CH4_output);
 }
 fn getCH3Sample(nibble: u4, output_level: u2) u4 {
     return switch (output_level) {
@@ -207,7 +205,7 @@ fn mix(
     CH2_output: u4,
     CH3_output: u4,
     CH4_output: u4,
-) bool {
+) void {
     var left: u9 = 0;
     var right: u9 = 0;
     const audterm = self.rAUDTERM;
@@ -226,19 +224,8 @@ fn mix(
     left *= (@as(u9, self.rAUDVOL.left_volume) + 1);
     right *= (@as(u9, self.rAUDVOL.right_volume) + 1);
 
-    // normalise
-    const normalised_left: f32 = @as(f32, @floatFromInt(left)) / 480.0;
-    const normalised_right: f32 = @as(f32, @floatFromInt(right)) / 480.0;
-
-    // combine
-    self.sample_buffer[self.sample_index] = normalised_left;
-    self.sample_buffer[self.sample_index + 1] = normalised_right;
-    self.sample_index += 2;
-    if (self.sample_index == self.sample_buffer.len) {
-        self.sample_index = 0;
-        return true;
-    }
-    return false;
+    self.left_sample = @as(f32, @floatFromInt(left)) / 480.0;
+    self.right_sample = @as(f32, @floatFromInt(right)) / 480.0;
 }
 
 fn tickFrequencyTimers(self: *Apu, cycles: u16) void {

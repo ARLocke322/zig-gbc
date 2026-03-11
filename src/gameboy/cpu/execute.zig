@@ -1,15 +1,15 @@
 const Cpu = @import("cpu.zig").Cpu;
-const Instruction = @import("testing.zig").Instruction;
+const Instruction = @import("decode.zig").Instruction;
 const check_cond = @import("helpers.zig").check_condition;
-const R8 = @import("decode.zig").R8;
+const R8 = @import("register.zig").R8;
 const Cb = @import("cb.zig").Cb;
-const R16 = @import("decode.zig").R16;
-const R16stk = @import("decode.zig").R16stk;
-const R16mem = @import("decode.zig").R16mem;
+const R16 = @import("register.zig").R16;
+const R16stk = @import("register.zig").R16stk;
+const R16mem = @import("register.zig").R16mem;
 const x = @import("functions.zig");
 
-pub fn execute(cpu: *Cpu, instruction: u8) void {
-    const op: Opcode = @bitCast(instruction);
+pub fn execute(cpu: *Cpu, instruction: Instruction) void {
+    const op: Opcode = @bitCast(@intFromEnum(instruction));
     switch (instruction) {
         .NOP => NOP(cpu),
         .STOP => STOP(cpu),
@@ -111,30 +111,30 @@ fn LD_n16_SP(cpu: *Cpu) void {
 
 fn INC_r16(cpu: *Cpu, op: Opcode) void {
     const r: R16 = @enumFromInt(op.y >> 1);
-    cpu.setR16(r, cpu.getR16(r) +% 1);
-    cpu.internalCycle();
+    x.execInc16(cpu, r, Cpu.setR16, cpu.getR16(r));
+    cpu.tick();
 }
 
 fn DEC_r16(cpu: *Cpu, op: Opcode) void {
     const r: R16 = @enumFromInt(op.y >> 1);
-    cpu.setR16(r, cpu.getR16(r) -% 1);
-    cpu.internalCycle();
+    x.execDec16(cpu, r, Cpu.setR16, cpu.getR16(r));
+    cpu.tick();
 }
 
 fn ADD_HL_r16(cpu: *Cpu, op: Opcode) void {
     const r: R16 = @enumFromInt(op.y >> 1);
-    x.execAdd16(cpu, cpu.HL.getHiLo(), cpu.getR16(r));
-    cpu.internalCycle();
+    x.execAdd16(cpu, .hl, Cpu.setR16, cpu.HL.getHiLo(), cpu.getR16(r));
+    cpu.tick();
 }
 
 fn INC_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.y);
-    x.execInc8(cpu, r, cpu.getR8(r));
+    x.execInc8(cpu, r, Cpu.setR8, cpu.getR8(r));
 }
 
 fn DEC_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.y);
-    x.execDec8(cpu, r, cpu.getR8(r));
+    x.execDec8(cpu, r, Cpu.setR8, cpu.getR8(r));
 }
 
 fn LD_r8_n8(cpu: *Cpu, op: Opcode) void {
@@ -143,22 +143,22 @@ fn LD_r8_n8(cpu: *Cpu, op: Opcode) void {
 }
 
 fn RLCA(cpu: *Cpu) void {
-    x.execRotateLeft(cpu, .a, cpu.AF.getHi(), false);
+    x.execRotateLeft(cpu, .a, Cpu.setR8, cpu.AF.getHi(), false);
     cpu.set_z(false);
 }
 
 fn RRCA(cpu: *Cpu) void {
-    x.execRotateRight(cpu, .a, cpu.AF.getHi(), false);
+    x.execRotateRight(cpu, .a, Cpu.setR8, cpu.AF.getHi(), false);
     cpu.set_z(false);
 }
 
 fn RLA(cpu: *Cpu) void {
-    x.execRotateLeft(cpu, .a, cpu.AF.getHi(), true);
+    x.execRotateLeft(cpu, .a, Cpu.setR8, cpu.AF.getHi(), true);
     cpu.set_z(false);
 }
 
 fn RRA(cpu: *Cpu) void {
-    x.execRotateRight(cpu, .a, cpu.AF.getHi(), true);
+    x.execRotateRight(cpu, .a, Cpu.setR8, cpu.AF.getHi(), true);
     cpu.set_z(false);
 }
 
@@ -208,37 +208,37 @@ fn LD_r8_r8(cpu: *Cpu, op: Opcode) void {
 
 fn ADD_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
-    x.execAdd8(cpu, .a, cpu.AF.getHi(), cpu.getR8(r), false);
+    x.execAdd8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.getR8(r), false);
 }
 
 fn ADC_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
-    x.execAdd8(cpu, .a, cpu.AF.getHi(), cpu.getR8(r), true);
+    x.execAdd8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.getR8(r), true);
 }
 
 fn SUB_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
-    x.execSub8(cpu, .a, cpu.AF.getHi(), cpu.getR8(r), false);
+    x.execSub8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.getR8(r), false);
 }
 
 fn SBC_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
-    x.execSub8(cpu, .a, cpu.AF.getHi(), cpu.getR8(r), true);
+    x.execSub8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.getR8(r), true);
 }
 
 fn AND_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
-    x.execAnd(cpu, .a, cpu.AF.getHi(), cpu.getR8(r));
+    x.execAnd(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.getR8(r));
 }
 
 fn XOR_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
-    x.execXor(cpu, .a, cpu.AF.getHi(), cpu.getR8(r));
+    x.execXor(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.getR8(r));
 }
 
 fn OR_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
-    x.execOr(cpu, .a, cpu.AF.getHi(), cpu.getR8(r));
+    x.execOr(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.getR8(r));
 }
 
 fn CP_A_r8(cpu: *Cpu, op: Opcode) void {
@@ -249,31 +249,31 @@ fn CP_A_r8(cpu: *Cpu, op: Opcode) void {
 // ===== BLOCK 3 =====
 
 fn ADD_A_n8(cpu: *Cpu) void {
-    x.execAdd8(cpu, .a, cpu.AF.getHi(), cpu.pc_pop_8(), false);
+    x.execAdd8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8(), false);
 }
 
 fn ADC_A_n8(cpu: *Cpu) void {
-    x.execAdd8(cpu, .a, cpu.AF.getHi(), cpu.pc_pop_8(), true);
+    x.execAdd8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8(), true);
 }
 
 fn SUB_A_n8(cpu: *Cpu) void {
-    x.execSub8(cpu, .a, cpu.AF.getHi(), cpu.pc_pop_8(), false);
+    x.execSub8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8(), false);
 }
 
 fn SBC_A_n8(cpu: *Cpu) void {
-    x.execSub8(cpu, .a, cpu.AF.getHi(), cpu.pc_pop_8(), true);
+    x.execSub8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8(), true);
 }
 
 fn AND_A_n8(cpu: *Cpu) void {
-    x.execAnd(cpu, .a, cpu.AF.getHi(), cpu.pc_pop_8());
+    x.execAnd(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8());
 }
 
 fn XOR_A_n8(cpu: *Cpu) void {
-    x.execXor(cpu, .a, cpu.AF.getHi(), cpu.pc_pop_8());
+    x.execXor(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8());
 }
 
 fn OR_A_n8(cpu: *Cpu) void {
-    x.execOr(cpu, .a, cpu.AF.getHi(), cpu.pc_pop_8());
+    x.execOr(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8());
 }
 
 fn CP_A_n8(cpu: *Cpu) void {
@@ -281,7 +281,7 @@ fn CP_A_n8(cpu: *Cpu) void {
 }
 
 fn RET_cond(cpu: *Cpu, op: Opcode) void {
-    cpu.tick(); // conditional ret always burns an extra cycle
+    cpu.tick();
     if (check_cond(cpu, @truncate(op.y))) {
         x.execRet(cpu);
         cpu.tick();
@@ -320,7 +320,7 @@ fn CALL_cond_n16(cpu: *Cpu, op: Opcode) void {
     const addr = cpu.pc_pop_16();
     if (check_cond(cpu, @truncate(op.y))) {
         cpu.tick();
-        x.execCall(cpu, addr); // push = 2 ticks
+        x.execCall(cpu, addr);
     }
 }
 
@@ -376,14 +376,14 @@ fn LD_A_n16(cpu: *Cpu) void {
 
 fn ADD_SP_n8(cpu: *Cpu) void {
     const offset: i8 = @bitCast(cpu.pc_pop_8());
-    x.execAdd16Signed(cpu, .sp, cpu.SP.getHiLo(), @as(i16, offset));
+    x.execAdd16Signed(cpu, .sp, Cpu.setR16, cpu.SP.getHiLo(), @as(i16, offset));
     cpu.tick();
     cpu.tick();
 }
 
 fn LD_HL_SP_n8(cpu: *Cpu) void {
     const offset: i8 = @bitCast(cpu.pc_pop_8());
-    x.execAdd16Signed(cpu, .hl, cpu.SP.getHiLo(), @as(i16, offset));
+    x.execAdd16Signed(cpu, .hl, Cpu.setR16, cpu.SP.getHiLo(), @as(i16, offset));
     cpu.tick();
 }
 
