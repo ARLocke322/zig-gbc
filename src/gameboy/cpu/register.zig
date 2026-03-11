@@ -47,3 +47,35 @@ pub fn inc(self: *Register) void {
 pub fn dec(self: *Register) void {
     self.value -%= 1;
 }
+
+pub const R8 = enum(u3) {
+    b = 0,
+    c = 1,
+    d = 2,
+    e = 3,
+    h = 4,
+    l = 5,
+    hl = 6,
+    a = 7,
+};
+
+pub const R16 = enum(u2) {
+    bc = 0,
+    de = 1,
+    hl = 2,
+    sp = 3,
+};
+
+pub const R16stk = enum(u2) {
+    bc = 0,
+    de = 1,
+    hl = 2,
+    af = 3,
+};
+
+pub const R16mem = enum(u2) {
+    bc = 0,
+    de = 1,
+    hli = 2,
+    hld = 3,
+};

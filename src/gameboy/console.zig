@@ -42,8 +42,7 @@ pub fn init(
 // Returns cycles taken for GUI to synchronise with frames
 pub fn step(
     self: *Console,
-) !u16 {
-    var cycles: u8 = 1; // minimum tick while halted
+) void {
 
     // Queues interrupt to be handled after next instruction executes
     if (self.cpu.IME_scheduled) {
@@ -54,29 +53,11 @@ pub fn step(
     // FDE for next instruction
     if (!self.cpu.halted) {
         const opcode = self.cpu.fetch();
-        cycles = self.cpu.decode_execute(opcode);
-    }
+        self.cpu.decode_execute(opcode);
+    } else self.cpu.tick();
 
     // Services interrupt
-    if (self.cpu.interrupt_controller.get_pending() != 0) {
-        self.cpu.halted = false;
-        if (self.cpu.IME) {
-            self.cpu.handle_interrupt();
-            cycles += 5;
-        }
-    }
-
-    // Adds pending stall cycles from DMA to current cycle count
-    const total_cycles = cycles + self.cpu.stall_cycles;
-    self.cpu.stall_cycles = 0;
-
-    // Ticks components by number of cycles taken (converted to t cycles)
-    self.timer.tick(total_cycles * 4);
-    self.ppu.tick(self.cpu, self.bus, total_cycles * 4);
-
-    self.apu.tick(total_cycles * 4);
-
-    return total_cycles;
+    self.cpu.handle_interrupt();
 }
 
 var instruction_count: u64 = 0;

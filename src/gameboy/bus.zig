@@ -4,7 +4,7 @@ const Timer = @import("timer.zig").Timer;
 const InterruptController = @import("interrupt_controller.zig").InterruptController;
 const Ppu = @import("ppu.zig").Ppu;
 const Joypad = @import("joypad.zig").Joypad;
-const Cpu = @import("cpu.zig").Cpu;
+const Cpu = @import("./cpu/cpu.zig").Cpu;
 const Apu = @import("apu/apu.zig").Apu;
 const assert = std.debug.assert;
 

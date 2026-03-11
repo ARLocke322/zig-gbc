@@ -1,5 +1,5 @@
 const Cpu = @import("cpu.zig").Cpu;
-const helpers = @import("helpers.zig");
+const helpers = @import("./cpu/helpers.zig");
 const x = @import("functions.zig");
 
 pub fn CB_PREFIX(cpu: *Cpu) u8 {
