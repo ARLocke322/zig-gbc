@@ -1,13 +1,14 @@
 // This is not used, just testing something out...
 const Console = @import("../console.zig").Console;
 const Register = @import("../register.zig").Register;
-const Cpu = @import("new_cpu.zig").Cpu;
+const Cpu = @import("cpu.zig").Cpu;
 const Bus = @import("../bus.zig").Bus;
-const x = @import("new_functions.zig");
+const x = @import("functions.zig");
 const std = @import("std");
 const AluOp = @import("block_2.zig").AluOp;
 const LdR8R8 = @import("block_1.zig").LdR8R8;
 const Block0 = @import("block_0.zig").Block0;
+const Block3 = @import("block_3.zig").Block3;
 
 const Instruction = union {
     alu_op: AluOp,
@@ -38,6 +39,10 @@ pub fn execute(raw_instruction: u8, cpu: *Cpu) Instruction {
         },
         0b10 => {
             var instr: AluOp = @bitCast(raw_instruction);
+            instr.execute(cpu);
+        },
+        0b11 => {
+            var instr: Block3 = @bitCast(raw_instruction);
             instr.execute(cpu);
         },
     }

@@ -2,8 +2,8 @@ const R8 = @import("decode.zig").R8;
 const R16 = @import("decode.zig").R16;
 const R16stk = @import("decode.zig").R16stk;
 const R16mem = @import("decode.zig").R16mem;
-const Cpu = @import("new_cpu.zig").Cpu;
-const x = @import("new_functions.zig");
+const Cpu = @import("cpu.zig").Cpu;
+const x = @import("functions.zig");
 const check_cond = @import("../helpers.zig").check_condition;
 
 pub const Block0 = packed struct(u8) {
@@ -13,11 +13,11 @@ pub const Block0 = packed struct(u8) {
     _prefix: u2 = 0,
 
     // I hate this but am stuck with it
-    pub fn execute(self: *Block0, cpu: *Cpu) void {
+    pub fn execute(self: Block0, cpu: *Cpu) void {
         switch (self.z) {
             0x0 => switch (self.y) {
                 0x0 => return, // NOP
-                0x1 => cpu.mem.write16(cpu.pc_pop_16(), cpu.SP.getHiLo()),
+                0x1 => cpu.write16(cpu.pc_pop_16(), cpu.SP.getHiLo()),
                 0x2 => return, // STOP
                 0x3 => x.execJumpRelative(cpu, @bitCast(cpu.pc_pop_8())),
                 0x4...0x7 => if (check_cond(cpu, @truncate(self.y)))
