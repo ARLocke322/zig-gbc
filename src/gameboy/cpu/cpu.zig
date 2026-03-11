@@ -1,9 +1,17 @@
 const execute = @import("execute.zig").execute;
+const decode = @import("decode.zig").decode;
 const helpers = @import("helpers.zig");
 
 const Register = @import("register.zig").Register;
-const Bus = @import("bus.zig").Bus;
-const InterruptController = @import("interrupt_controller.zig").InterruptController;
+const Timer = @import("../timer.zig").Timer;
+const Bus = @import("../bus.zig").Bus;
+const Ppu = @import("../ppu.zig").Ppu;
+const Apu = @import("../apu/apu.zig").Apu;
+const InterruptController = @import("../interrupt_controller.zig").InterruptController;
+const R8 = @import("register.zig").R8;
+const R16 = @import("register.zig").R16;
+const R16stk = @import("register.zig").R16stk;
+const R16mem = @import("register.zig").R16mem;
 
 // The CPU component, handles fetching, decoding, executing, and interrupt
 //   servicing
@@ -22,7 +30,10 @@ PC: Register,
 KEY1: u8,
 
 mem: *Bus,
+timer: *Timer,
 interrupt_controller: *InterruptController,
+ppu: *Ppu,
+apu: *Apu,
 
 // IME_scheduled queues the interrupt for after the next instruction, IME
 //   triggers the interrupt to be handled
@@ -38,7 +49,10 @@ halted: bool,
 // Initialises CPU + Register with post boot rom values
 pub fn init(
     mem: *Bus,
+    timer: *Timer,
     interrupt_controller: *InterruptController,
+    ppu: *Ppu,
+    apu: *Apu,
     cgb: bool,
 ) Cpu {
     return Cpu{
@@ -54,6 +68,9 @@ pub fn init(
         .IME_scheduled = false,
         .interrupt_controller = interrupt_controller,
         .halted = false,
+        .timer = timer,
+        .ppu = ppu,
+        .apu = apu,
     };
 }
 
@@ -63,9 +80,35 @@ pub fn fetch(self: *Cpu) u8 {
 }
 
 // Decodes and executs an instruction, returns the cycles taken
-pub fn decode_execute(self: *Cpu, instruction: u8) u8 {
-    const cycles: u8 = execute(self, instruction);
-    return cycles;
+pub fn decode_execute(self: *Cpu, instruction: u8) void {
+    execute(self, decode(instruction));
+}
+
+pub fn tick(self: *Cpu) void {
+    self.timer.tick(4);
+    self.ppu.tick(self, self.mem, 4);
+    self.apu.tick(4);
+}
+
+pub fn read8(self: *Cpu, addr: u16) u8 {
+    self.tick();
+    return self.mem.read8(addr);
+}
+
+pub fn write8(self: *Cpu, addr: u16, val: u8) void {
+    self.tick();
+    self.mem.write8(addr, val);
+}
+
+pub fn read16(self: *Cpu, addr: u16) u16 {
+    const lo = self.read8(addr);
+    const hi = self.read8(addr +% 1);
+    return @as(u16, hi) << 8 | lo;
+}
+
+pub fn write16(self: *Cpu, addr: u16, val: u16) void {
+    self.write8(addr, @truncate(val));
+    self.write8(addr +% 1, @truncate(val >> 8));
 }
 
 // Checks for pending interrupts, unhalts CPU if found, then if IME is enabled
@@ -75,6 +118,7 @@ pub fn handle_interrupt(self: *Cpu) void {
     const pending = self.interrupt_controller.get_pending();
 
     if (pending != 0) self.halted = false;
+    if (!self.IME) return;
 
     var interrupt_bit: u3 = 0;
     if (pending & 0x01 != 0) {
@@ -96,7 +140,11 @@ pub fn handle_interrupt(self: *Cpu) void {
 
     self.IME = false;
     self.interrupt_controller.acknowledge(interrupt_bit);
+
+    self.tick();
+    self.tick();
     self.sp_push_16(self.PC.getHiLo());
+    self.tick();
 
     const vector: u16 = 0x0040 + @as(u16, interrupt_bit) * 8;
     self.PC.set(vector);
@@ -104,25 +152,25 @@ pub fn handle_interrupt(self: *Cpu) void {
 
 // Gets the next 2 bytes in the PC and increments, used for imm16 instructions
 pub fn pc_pop_16(self: *Cpu) u16 {
-    const b1: u8 = self.mem.read8(self.PC.getHiLo());
+    const b1: u8 = self.read8(self.PC.getHiLo());
     self.PC.inc();
-    const b2: u8 = self.mem.read8(self.PC.getHiLo());
+    const b2: u8 = self.read8(self.PC.getHiLo());
     self.PC.inc();
     return @as(u16, b2) << 8 | b1;
 }
 
 // Gets the next byte in the PC and increments, used for imm8 instructions
 pub fn pc_pop_8(self: *Cpu) u8 {
-    const b: u8 = self.mem.read8(self.PC.getHiLo());
+    const b: u8 = self.read8(self.PC.getHiLo());
     self.PC.inc();
     return b;
 }
 
 // Pops the top 2 bytes off the stack
 pub fn sp_pop_16(self: *Cpu) u16 {
-    const b1: u8 = self.mem.read8(self.SP.getHiLo());
+    const b1: u8 = self.read8(self.SP.getHiLo());
     self.SP.inc();
-    const b2: u8 = self.mem.read8(self.SP.getHiLo());
+    const b2: u8 = self.read8(self.SP.getHiLo());
     self.SP.inc();
     return @as(u16, b2) << 8 | b1;
 }
@@ -130,9 +178,9 @@ pub fn sp_pop_16(self: *Cpu) u16 {
 // Pushes a 2 bytes onto the stack
 pub fn sp_push_16(self: *Cpu, val: u16) void {
     self.SP.dec();
-    self.mem.write8(self.SP.getHiLo(), @truncate(val >> 8));
+    self.write8(self.SP.getHiLo(), @truncate(val >> 8));
     self.SP.dec();
-    self.mem.write8(self.SP.getHiLo(), @truncate(val));
+    self.write8(self.SP.getHiLo(), @truncate(val));
 }
 
 // Sets the C flag
@@ -193,4 +241,98 @@ pub fn get_n(self: *Cpu) u1 {
 // Gets the value of the Z flag
 pub fn get_z(self: *Cpu) u1 {
     return @truncate((self.AF.getLo() & 0x80) >> 7);
+}
+
+pub fn getR8(self: *Cpu, register: R8) u8 {
+    return switch (register) {
+        .b => self.BC.getHi(),
+        .c => self.BC.getLo(),
+        .d => self.DE.getHi(),
+        .e => self.DE.getLo(),
+        .h => self.HL.getHi(),
+        .l => self.HL.getLo(),
+        .hl => self.read8(self.HL.getHiLo()),
+        .a => self.AF.getHi(),
+    };
+}
+
+pub fn setR8(self: *Cpu, register: R8, val: u8) void {
+    switch (register) {
+        .b => self.BC.setHi(val),
+        .c => self.BC.setLo(val),
+        .d => self.DE.setHi(val),
+        .e => self.DE.setLo(val),
+        .h => self.HL.setHi(val),
+        .l => self.HL.setLo(val),
+        .hl => self.write8(self.HL.getHiLo(), val),
+        .a => self.AF.setHi(val),
+    }
+}
+
+pub fn getR16(self: *Cpu, register: R16) u16 {
+    return switch (register) {
+        .bc => self.BC.getHiLo(),
+        .de => self.DE.getHiLo(),
+        .hl => self.HL.getHiLo(),
+        .sp => self.SP.getHiLo(),
+    };
+}
+
+pub fn setR16(self: *Cpu, register: R16, val: u16) void {
+    switch (register) {
+        .bc => self.BC.set(val),
+        .de => self.DE.set(val),
+        .hl => self.HL.set(val),
+        .sp => self.SP.set(val),
+    }
+}
+
+pub fn setR16stk(self: *Cpu, register: R16stk, val: u16) void {
+    switch (register) {
+        .bc => self.BC.set(val),
+        .de => self.DE.set(val),
+        .hl => self.HL.set(val),
+        .af => self.AF.set(val & 0xFFF0),
+    }
+}
+
+pub fn getR16stk(self: *Cpu, register: R16stk) u16 {
+    return switch (register) {
+        .bc => self.BC.getHiLo(),
+        .de => self.DE.getHiLo(),
+        .hl => self.HL.getHiLo(),
+        .af => self.AF.getHiLo() & 0xFFF0,
+    };
+}
+
+pub fn setR16mem(self: *Cpu, register: R16mem, val: u8) void {
+    switch (register) {
+        .bc => self.write8(self.BC.getHiLo(), val),
+        .de => self.write8(self.DE.getHiLo(), val),
+        .hli => {
+            self.write8(self.HL.getHiLo(), val);
+            self.HL.inc();
+        },
+        .hld => {
+            self.write8(self.HL.getHiLo(), val);
+            self.HL.dec();
+        },
+    }
+}
+
+pub fn getR16mem(self: *Cpu, register: R16mem) u8 {
+    return switch (register) {
+        .bc => self.read8(self.BC.getHiLo()),
+        .de => self.read8(self.DE.getHiLo()),
+        .hli => {
+            const val = self.read8(self.HL.getHiLo());
+            self.HL.inc();
+            return val;
+        },
+        .hld => {
+            const val = self.read8(self.HL.getHiLo());
+            self.HL.dec();
+            return val;
+        },
+    };
 }

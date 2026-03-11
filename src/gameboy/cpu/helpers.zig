@@ -1,6 +1,6 @@
 const std = @import("std");
 const Cpu = @import("cpu.zig").Cpu;
-const Register = @import("register.zig").Register;
+const Register = @import("../register.zig").Register;
 
 // Performs a check on whether a 4 bit addition with carry overflowed, used
 //   for H flag

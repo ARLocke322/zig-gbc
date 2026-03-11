@@ -1,6 +1,6 @@
 const Cartridge = @import("./cartridge/cartridge.zig").Cartridge;
 const Console = @import("./gameboy/console.zig").Console;
-const Cpu = @import("./gameboy/cpu.zig").Cpu;
+const Cpu = @import("./gameboy/cpu/cpu.zig").Cpu;
 const Bus = @import("./gameboy/bus.zig").Bus;
 const Ppu = @import("./gameboy/ppu.zig").Ppu;
 const Apu = @import("./gameboy/apu/apu.zig").Apu;
@@ -72,7 +72,7 @@ pub fn main(init: std.process.Init) !void {
     defer allocator.free(audio_stream_buffer);
 
     var bus = Bus.init(&cart, &timer, &interrupt_controller, &ppu, &apu, &joypad, cgb);
-    var cpu = Cpu.init(&bus, &interrupt_controller, cgb);
+    var cpu = Cpu.init(&bus, &timer, &interrupt_controller, &ppu, &apu, cgb);
     bus.cpu = &cpu;
 
     // Initialise console
