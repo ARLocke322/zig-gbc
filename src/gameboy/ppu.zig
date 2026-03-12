@@ -64,7 +64,7 @@ pub const Ppu = struct {
     bg_palettes: [8][4]u32 = undefined,
     obj_palettes: [8][4]u32 = undefined,
 
-    frame_ready: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    frame_ready: bool = false,
 
     pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
         return Ppu{
@@ -280,7 +280,7 @@ pub const Ppu = struct {
             if (self.ly == 144) {
                 self.set_ppu_mode(1);
                 self.interrupt_controller.request(InterruptController.VBLANK);
-                self.frame_ready.store(true, .release);
+                self.frame_ready = true;
             } else self.set_ppu_mode(2);
 
             self.handle_stat_interrupt();
@@ -297,7 +297,7 @@ pub const Ppu = struct {
         self.hdma_src += 0x10;
         self.hdma_dest += 0x10;
         self.hdma_remaining -= 1;
-        cpu.stall_cycles += 32;
+        for (0..8) |_| cpu.tick();
 
         if (self.hdma_remaining == 0) {
             self.hdma_active = false;

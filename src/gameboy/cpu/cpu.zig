@@ -40,9 +40,6 @@ apu: *Apu,
 IME: bool,
 IME_scheduled: bool,
 
-// Stores number of cycles to waste due to DMA transfers
-stall_cycles: u16 = 0,
-
 // Is the cpu halted
 halted: bool,
 
@@ -81,7 +78,7 @@ pub fn fetch(self: *Cpu) u8 {
 
 // Decodes and executs an instruction, returns the cycles taken
 pub fn decode_execute(self: *Cpu, instruction: u8) void {
-    execute(self, decode(instruction));
+    execute(self, instruction);
 }
 
 pub fn tick(self: *Cpu) void {

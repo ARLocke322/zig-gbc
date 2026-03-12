@@ -1,5 +1,6 @@
 const Cpu = @import("cpu.zig").Cpu;
 const Instruction = @import("decode.zig").Instruction;
+const decode = @import("decode.zig").decode;
 const check_cond = @import("helpers.zig").check_condition;
 const R8 = @import("register.zig").R8;
 const Cb = @import("cb.zig").Cb;
@@ -8,8 +9,9 @@ const R16stk = @import("register.zig").R16stk;
 const R16mem = @import("register.zig").R16mem;
 const x = @import("functions.zig");
 
-pub fn execute(cpu: *Cpu, instruction: Instruction) void {
-    const op: Opcode = @bitCast(@intFromEnum(instruction));
+pub fn execute(cpu: *Cpu, raw_instruction: u8) void {
+    const op: Opcode = @bitCast(raw_instruction);
+    const instruction: Instruction = decode(raw_instruction);
     switch (instruction) {
         .NOP => NOP(cpu),
         .STOP => STOP(cpu),

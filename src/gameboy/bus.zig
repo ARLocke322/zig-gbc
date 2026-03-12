@@ -168,9 +168,8 @@ pub const Bus = struct {
                         for (0..num_bytes) |i| {
                             const byte = self.read8(src_addr + @as(u16, @intCast(i)));
                             self.ppu.write8(dest_addr + @as(u16, @intCast(i)), byte);
+                            if (i % 2 == 1) self.cpu.tick();
                         }
-
-                        self.cpu.stall_cycles += num_blocks * 32;
                     } else {
                         self.ppu.hdma_active = true;
                         self.ppu.hdma_src = src_addr;
