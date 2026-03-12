@@ -89,8 +89,8 @@ pub const Window = struct {
                 }
             }
 
-            if (gb.ppu.frame_ready.load(.acquire)) {
-                gb.ppu.frame_ready.store(false, .release);
+            if (gb.ppu.frame_ready) {
+                gb.ppu.frame_ready = false;
                 _ = SDL.SDL_UpdateTexture(
                     self.texture,
                     null,

@@ -54,7 +54,6 @@ pub fn step(
 
     // FDE for next instruction
     if (!self.cpu.halted) {
-        // self.debugPrint();
         const opcode = self.cpu.fetch();
         self.cpu.decode_execute(opcode);
     } else self.cpu.tick();
@@ -70,12 +69,17 @@ pub fn stepToSample(self: *Console) void {
     }
 }
 
+var instruction_count: u64 = 0;
+
 // Prints Various registers for debugging
 fn debugPrint(self: *Console) void {
-    const pc = self.cpu.PC.getHiLo();
-    const opcode = self.cpu.mem.read8(pc);
-    std.debug.print("PC:{X:0>4} OP:{X:0>2} AF:{X:0>4} SP:{X:0>4}\n", .{
-        pc,                    opcode,
-        self.cpu.AF.getHiLo(), self.cpu.SP.getHiLo(),
-    });
+    instruction_count += 1;
+    if (instruction_count < 20000) {
+        const pc = self.cpu.PC.getHiLo();
+        const opcode = self.cpu.mem.read8(pc);
+        std.debug.print("[{d}] PC:{X:0>4} OP:{X:0>2} AF:{X:0>4} SP:{X:0>4}\n", .{
+            instruction_count,     pc,                    opcode,
+            self.cpu.AF.getHiLo(), self.cpu.SP.getHiLo(),
+        });
+    }
 }
