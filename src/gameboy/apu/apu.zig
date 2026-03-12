@@ -49,7 +49,7 @@ pub fn init(
 }
 
 pub fn read(self: *Apu, addr: u16) u8 {
-    assert((addr >= 0xFF10 and addr <= 0xFF26) or
+    assert((addr >= 0xFF10 and addr <= 0xFF3F) or
         (addr >= 0xFF30 and addr <= 0xFF3F));
     return switch (addr) {
         0xFF10 => @as(u8, @bitCast(self.channel_1.SWEEP)) | 0x80,
@@ -79,7 +79,7 @@ pub fn read(self: *Apu, addr: u16) u8 {
 }
 
 pub fn write(self: *Apu, addr: u16, val: u8) void {
-    assert((addr >= 0xFF10 and addr <= 0xFF26) or
+    assert((addr >= 0xFF10 and addr <= 0xFF3F) or
         (addr >= 0xFF30 and addr <= 0xFF3F));
     switch (addr) {
         0xFF10 => self.channel_1.SWEEP = @bitCast(val),

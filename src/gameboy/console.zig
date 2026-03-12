@@ -49,6 +49,20 @@ pub fn step(
         self.cpu.IME_scheduled = false;
     }
 
+    // Don't execute any instruction is dma is active
+    if (self.bus.dma_active) {
+        self.bus.tickDma();
+        self.cpu.tick();
+        return;
+    }
+
+    // Don't execute any instruciton if gdma is active
+    if (self.bus.gdma_active) {
+        self.bus.tickGdma();
+        self.cpu.tick();
+        return;
+    }
+
     // FDE for next instruction
     if (!self.cpu.halted) {
         const opcode = self.cpu.fetch();

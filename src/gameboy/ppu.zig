@@ -54,6 +54,8 @@ pub const Ppu = struct {
     hdma_src: u16 = 0,
     hdma_dest: u16 = 0,
     hdma_remaining: u16 = 0, // in blocks of 16 bytes
+    hdma_block_active: bool = false,
+    hdma_block_step: u16 = 0,
     //
     cgb: bool = false,
     vram_bank: u1 = 0,
@@ -252,7 +254,7 @@ pub const Ppu = struct {
         if (mode != 3) self.obj_cram[tgt_address] = val;
     }
 
-    pub fn tick(self: *Ppu, cpu: *Cpu, bus: *Bus, cycles: u16) void {
+    pub fn tick(self: *Ppu, bus: *Bus, cycles: u16) void {
         if ((self.lcd_control & 0x80) == 0) {
             self.set_ppu_mode(2);
             self.ly = 0;
@@ -263,17 +265,22 @@ pub const Ppu = struct {
         self.cycles += cycles;
         const mode: u2 = @truncate(self.stat);
         switch (mode) {
-            0x00 => self.handle_hblank(cpu, bus),
+            0x00 => self.handle_hblank(bus),
             0x01 => self.handle_vblank(),
             0x02 => self.handle_oam_scan(),
             0x03 => self.handle_render(),
         }
     }
 
-    fn handle_hblank(self: *Ppu, cpu: *Cpu, bus: *Bus) void {
+    fn handle_hblank(self: *Ppu, bus: *Bus) void {
         if (self.cycles >= 204) {
             if (self.hdma_active and self.ly < 144) {
-                self.execute_hdma_block(cpu, bus);
+                if (self.hdma_block_active) {
+                    self.tickHdmaBlock(bus);
+                } else if (self.cycles >= 76) {
+                    self.hdma_block_active = true;
+                    self.tickHdmaBlock(bus);
+                }
             }
             self.ly +%= 1;
             self.cycles -= 204;
@@ -287,20 +294,22 @@ pub const Ppu = struct {
         }
     }
 
-    fn execute_hdma_block(self: *Ppu, cpu: *Cpu, bus: *Bus) void {
-        for (0..0x10) |i| {
-            const byte = bus.read8(self.hdma_src + @as(u16, @intCast(i)));
-            // self.write8(self.hdma_dest, byte);
-            self.write8(self.hdma_dest + @as(u16, @intCast(i)), byte);
-        }
+    fn tickHdmaBlock(self: *Ppu, bus: *Bus) void {
+        const byte = bus.read8(self.hdma_src + self.hdma_block_step);
+        self.write8(self.hdma_dest + self.hdma_block_step, byte);
+        self.hdma_block_step += 1;
 
-        self.hdma_src += 0x10;
-        self.hdma_dest += 0x10;
-        self.hdma_remaining -= 1;
-        for (0..8) |_| cpu.tick();
+        if (self.hdma_block_step == 0x10) {
+            self.hdma_block_active = false;
+            self.hdma_block_step = 0;
 
-        if (self.hdma_remaining == 0) {
-            self.hdma_active = false;
+            self.hdma_src += 0x10;
+            self.hdma_dest += 0x10;
+            self.hdma_remaining -= 1;
+
+            if (self.hdma_remaining == 0) {
+                self.hdma_active = false;
+            }
         }
     }
 
