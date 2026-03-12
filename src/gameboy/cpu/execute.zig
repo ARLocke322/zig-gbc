@@ -194,7 +194,7 @@ fn JR_cond_n8(cpu: *Cpu, op: Opcode) void {
     }
 }
 
-// ===== BLOCK 1 =====
+// ----- BLOCK 1 -----
 
 fn HALT(cpu: *Cpu) void {
     cpu.halted = true;
@@ -206,7 +206,7 @@ fn LD_r8_r8(cpu: *Cpu, op: Opcode) void {
     cpu.setR8(dst, cpu.getR8(src));
 }
 
-// ===== BLOCK 2 =====
+// ----- BLOCK 2 -----
 
 fn ADD_A_r8(cpu: *Cpu, op: Opcode) void {
     const r: R8 = @enumFromInt(op.z);
@@ -248,7 +248,7 @@ fn CP_A_r8(cpu: *Cpu, op: Opcode) void {
     x.execCp(cpu, cpu.AF.getHi(), cpu.getR8(r));
 }
 
-// ===== BLOCK 3 =====
+// ----- BLOCK 3 -----
 
 fn ADD_A_n8(cpu: *Cpu) void {
     x.execAdd8(cpu, .a, Cpu.setR8, cpu.AF.getHi(), cpu.pc_pop_8(), false);

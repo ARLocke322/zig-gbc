@@ -16,8 +16,6 @@ cpu: *Cpu,
 ppu: *Ppu,
 apu: *Apu,
 
-const CYCLES_PER_SAMPLE: f64 = 4_194_304.0 / 48_000.0;
-
 // Creates a Console struct with pointers to various components
 pub fn init(
     interrupt_controller: *InterruptController,
@@ -41,7 +39,6 @@ pub fn init(
 //   components by however many cycles the instruction took
 // Checks if IME is scheduled and handles the interrupt after the next
 //   instruction if so
-// Returns cycles taken for GUI to synchronise with frames
 pub fn step(
     self: *Console,
 ) void {

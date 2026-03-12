@@ -9,6 +9,7 @@ const SCALE = 4;
 const WIDTH = 160;
 const HEIGHT = 144;
 var turbo: bool = false;
+const TURBO_MULTIPLIER = 4.0;
 
 pub const Window = struct {
     window: *SDL.SDL_Window,
@@ -84,6 +85,10 @@ pub const Window = struct {
                     },
                     SDL.SDL_EVENT_KEY_UP => {
                         setKey(gb.bus.joypad, ev.key.scancode, false);
+                        if (turbo)
+                            _ = SDL.SDL_SetAudioStreamFrequencyRatio(self.audio_stream, TURBO_MULTIPLIER)
+                        else
+                            _ = SDL.SDL_SetAudioStreamFrequencyRatio(self.audio_stream, 1.0);
                     },
                     else => {},
                 }
