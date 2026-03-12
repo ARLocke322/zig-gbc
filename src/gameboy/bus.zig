@@ -9,9 +9,9 @@ const Apu = @import("apu/apu.zig").Apu;
 const assert = std.debug.assert;
 
 pub const Bus = struct {
-    wram_0: [0x1000]u8 = .{0} ** 0x1000, // 0xC000-0xCFFF: 4 KiB WRAM
-    wram_n: [7 * 0x1000]u8 = .{0} ** (7 * 0x1000), // 0xD000-0xDFFF: 4 KiB WRAM (switchable in CGB)
-    hram: [0x7F]u8 = .{0} ** 0x7F, // 0xFF80-0xFFFE: HRAM
+    wram_0: [0x1000]u8 = .{0} ** 0x1000,
+    wram_n: [7 * 0x1000]u8 = .{0} ** (7 * 0x1000),
+    hram: [0x7F]u8 = .{0} ** 0x7F,
 
     wbk: u3 = 1,
 
@@ -52,7 +52,6 @@ pub const Bus = struct {
             0xC000...0xCFFF => self.wram_0[address - 0xC000],
             0xD000...0xDFFF => {
                 if (self.cgb) {
-                    // const ix = address + ((@as(u16, self.wbk) - 1) * 0xD000);
                     const ix = (address - 0xD000) + (@as(usize, self.wbk) - 1) * 0x1000;
                     assert(ix < self.wram_n.len);
                     return self.wram_n[ix];
