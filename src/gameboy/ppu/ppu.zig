@@ -70,8 +70,8 @@ pub fn read8(self: *Ppu, addr: u16) u8 {
         0xFF47 => @bitCast(self.dmg.bg_palette_data),
         0xFF48 => @bitCast(self.dmg.object_palette_0_data),
         0xFF49 => @bitCast(self.dmg.object_palette_1_data),
-        0xFF4A => self.registers.wx,
-        0xFF4B => self.registers.wy,
+        0xFF4A => self.registers.wy,
+        0xFF4B => self.registers.wx,
         0xFF4F => @as(u8, self.vram.bank),
         0xFF68 => @bitCast(self.cgb.bg_palette_idx),
         0xFF69 => self.getCgbBgPaletteData(),
@@ -146,7 +146,7 @@ pub fn write8(
 }
 
 fn getCgbBgPaletteData(self: *Ppu) u8 {
-    if (self.registers.stat.ppu_mode != .pixel_transfer) return 0xFF;
+    if (self.registers.stat.ppu_mode == .pixel_transfer) return 0xFF;
     const tgt_address: u6 = self.cgb.bg_palette_idx.palette_address;
     return self.cgb.bg_cram[tgt_address];
 }
@@ -174,11 +174,11 @@ fn setCgbObjPaletteData(self: *Ppu, val: u8) void {
     if (self.cgb.object_palette_idx.auto_increment)
         self.cgb.object_palette_idx.palette_address +%= 1;
 
-    self.cgb.bg_cram[tgt_address] = val;
+    self.cgb.object_cram[tgt_address] = val;
 }
 
 pub fn tick(self: *Ppu, bus: *Bus, cycles: u16) void {
-    if (self.registers.lcd_control.lcd_ppu_enabled) {
+    if (!self.registers.lcd_control.lcd_ppu_enabled) {
         self.registers.stat.ppu_mode = .oam_scan;
         self.registers.ly = 0;
         self.internal.cycles = 0;
@@ -298,7 +298,7 @@ fn handle_stat_interrupt(self: *Ppu) void {
     self.internal.current_signal = if ((self.registers.stat.lyc_equals_ly_intr_selected and self.registers.stat.lyc_equals_ly) or
         switch (self.registers.stat.ppu_mode) {
             .hblank => self.registers.stat.hblank_intr_selected,
-            .vblank => self.registers.stat.hblank_intr_selected,
+            .vblank => self.registers.stat.vblank_intr_selected,
             .oam_scan => self.registers.stat.oam_scan_intr_selected,
             .pixel_transfer => false,
         }) true else false;

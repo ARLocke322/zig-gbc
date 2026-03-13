@@ -140,13 +140,13 @@ pub const DmgBgPaletteData = packed struct(u8) {
 };
 
 pub const DmgObjectPaletteData = packed struct(u8) {
-    id_0: DmgColour = 0,
+    id_0: DmgColour = .white,
     id_1: DmgColour = .white,
     id_2: DmgColour = .white,
     id_3: DmgColour = .white,
 };
 
-const DmgColour = enum(u2) { white, light_gray, dark_gray, black };
+pub const DmgColour = enum(u2) { white, light_gray, dark_gray, black };
 
 pub const CgbPaletteIndex = packed struct(u8) {
     palette_address: u6 = 0,
