@@ -83,7 +83,7 @@ pub fn decode_execute(self: *Cpu, instruction: u8) void {
 
 pub fn tick(self: *Cpu) void {
     self.timer.tick(4);
-    self.ppu.tick(self, self.mem, 4);
+    self.ppu.tick(self.mem, 4);
     self.apu.tick(4);
 }
 

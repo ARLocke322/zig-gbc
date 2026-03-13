@@ -2,11 +2,8 @@
 
 ## To Do
 
-- [ ] APU
 - [ ] Save + Load state
 - [ ] Fifo rendering
-- [ ] Full cycle accuracy
-- [ ] Refactor CPU instruction interface
 - [ ] Refactor component registers into packed structs
 - [ ] Timer Falling Edge
 
@@ -50,3 +47,6 @@
 - [x] rom selection / show file dialog
 - [x] MBC5
 - [x] Refactor audio channels into their own structs
+- [x] Full cycle accuracy
+- [x] Refactor CPU instruction interface
+- [x] APU

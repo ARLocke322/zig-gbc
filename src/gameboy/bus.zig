@@ -25,6 +25,16 @@ pub const Bus = struct {
     cgb: bool,
     hdma: bool = false,
 
+    dma_active: bool = false,
+    dma_source: u16 = 0,
+    dma_step: u8 = 0,
+
+    gdma_source: u16 = 0,
+    gdma_dest: u16 = 0,
+    gdma_num_bytes: u16 = 0,
+    gdma_step: u16 = 0,
+    gdma_active: bool = false,
+
     pub fn init(
         cartridge: *Cartridge,
         timer: *Timer,
@@ -84,6 +94,14 @@ pub const Bus = struct {
             0xFF40...0xFF4B => self.ppu.read8(address),
             0xFF4C...0xFF4D => 0xFF, // KEY CGB
             0xFF4F => self.ppu.read8(address),
+            0xFF5F => {
+                if (self.ppu.hdma_active) {
+                    return @as(u8, @truncate(self.ppu.hdma_remaining));
+                } else if (self.gdma_active) {
+                    return @as(u8, @truncate(self.gdma_num_bytes - self.gdma_step));
+                }
+                return 0xFF;
+            },
             0xFF68...0xFF6C => self.ppu.read8(address),
             0xFF70 => @as(u8, self.wbk),
 
@@ -121,12 +139,8 @@ pub const Bus = struct {
             0xFF40...0xFF45, 0xFF47...0xFF4B => self.ppu.write8(address, value),
             0xFF46 => {
                 self.ppu.dma = value; // Store DMA register
-                // DMA transfer
-                const source = @as(u16, value) << 8;
-                for (0..0xA0) |i| {
-                    const byte = self.read8(source + @as(u16, @intCast(i)));
-                    self.ppu.oam[i] = byte;
-                }
+                self.dma_active = true;
+                self.dma_source = @as(u16, value) << 8;
             },
             0xFF4C...0xFF4D => {}, // KEY1 KEY2
             0xFF4F => self.ppu.write8(address, value),
@@ -146,6 +160,7 @@ pub const Bus = struct {
             0xFF55 => {
                 // initidate rVDMA
                 if (self.cgb) {
+                    self.ppu.rVDMA_LEN = value;
                     const transfer_mode: u1 = @truncate(value >> 7);
 
                     if (transfer_mode == 0 and self.ppu.hdma_active) {
@@ -164,11 +179,11 @@ pub const Bus = struct {
                     const num_bytes: u16 = num_blocks * 0x10;
 
                     if (transfer_mode == 0) {
-                        for (0..num_bytes) |i| {
-                            const byte = self.read8(src_addr + @as(u16, @intCast(i)));
-                            self.ppu.write8(dest_addr + @as(u16, @intCast(i)), byte);
-                            if (i % 2 == 1) self.cpu.tick();
-                        }
+                        self.gdma_source = src_addr;
+                        self.gdma_dest = dest_addr;
+                        self.gdma_num_bytes = num_bytes;
+                        self.gdma_step = 0;
+                        self.gdma_active = true;
                     } else {
                         self.ppu.hdma_active = true;
                         self.ppu.hdma_src = src_addr;
@@ -190,6 +205,33 @@ pub const Bus = struct {
             else => {},
         }
     }
+    pub fn tickDma(self: *Bus) void {
+        const byte = self.read8(self.dma_source + self.dma_step);
+        self.ppu.oam[self.dma_step] = byte;
+        self.dma_step += 1;
+        if (self.dma_step == 0xA0) {
+            self.dma_active = false;
+            self.dma_step = 0;
+            self.dma_source = 0;
+        }
+    }
+
+    pub fn tickGdma(self: *Bus) void {
+        const byte1 = self.read8(self.gdma_source + self.gdma_step);
+        const byte2 = self.read8(self.gdma_source + self.gdma_step + 1);
+        self.ppu.write8(self.gdma_dest + self.gdma_step, byte1);
+        self.ppu.write8(self.gdma_dest + self.gdma_step + 1, byte2);
+        self.gdma_step += 2;
+
+        if (self.gdma_step == self.gdma_num_bytes) {
+            self.gdma_active = false;
+            self.gdma_source = 0;
+            self.gdma_dest = 0;
+            self.gdma_num_bytes = 0;
+            self.gdma_step = 0;
+        }
+    }
+
     pub fn read16(self: *Bus, address: u16) u16 {
         const low = self.read8(address);
         const high = self.read8(address + 1);
