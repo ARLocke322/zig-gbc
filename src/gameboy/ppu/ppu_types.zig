@@ -120,7 +120,7 @@ pub const ObjectAttribute = packed struct(u32) {
     y_position: u8 = 0,
     x_position: u8 = 0,
     tile_index: u8 = 0,
-    attributes: ObjectFlags = .{},
+    flags: ObjectFlags = .{},
 };
 
 const ObjectFlags = packed struct(u8) {
@@ -140,7 +140,7 @@ pub const DmgBgPaletteData = packed struct(u8) {
 };
 
 pub const DmgObjectPaletteData = packed struct(u8) {
-    _unused: u2 = 0,
+    id_0: DmgColour = 0,
     id_1: DmgColour = .white,
     id_2: DmgColour = .white,
     id_3: DmgColour = .white,

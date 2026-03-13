@@ -51,13 +51,24 @@ fn renderBackgroundDmg(ppu: *Ppu) void {
 }
 
 fn renderWindowDmg(ppu: *Ppu) void {
-    const map_base: u16 = if ((ppu.internal.latched.lcd_control & 0x40) != 0) 0x9C00 else 0x9800;
-    const tile_base: u16 = if ((ppu.internal.latched.lcd_control & 0x10) != 0) 0x8000 else 0x9000;
-    const use_unsigned_tiles = (ppu.internal.latched.lcd_control & 0x10) != 0;
+    const map_base: u16 = if (ppu.internal.latched.lcd_control.bg_tile_map_area == 0)
+        0x9800
+    else
+        0x9C00;
+
+    const tile_base: u16 = if (ppu.internal.latched.lcd_control.bg_window_tile_data_area == 0)
+        0x9000
+    else
+        0x8000;
+
+    const use_unsigned_tiles =
+        (ppu.internal.latched.lcd_control.bg_window_tile_data_area == 1);
+
     var palette: [4]u32 = undefined;
-    for (0..4) |i| {
-        palette[i] = PALETTE[(ppu.latched_bgp >> @intCast(i * 2)) & 3];
-    }
+    palette[0] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_0);
+    palette[1] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_1);
+    palette[2] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_2);
+    palette[3] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_3);
 
     const window_x_start: u8 = if (ppu.internal.latched.wx > 7) ppu.internal.latched.wx - 7 else 0;
     const window_x_offset: u8 = if (ppu.internal.latched.wx >= 7) 0 else 7 - ppu.internal.latched.wx;
@@ -66,7 +77,7 @@ fn renderWindowDmg(ppu: *Ppu) void {
         if (@as(u8, @truncate(x)) < window_x_start) continue;
         // absolute x, y positions in window
         const map_x: u8 = @as(u8, @truncate(x)) - window_x_start + window_x_offset;
-        const map_y: u8 = ppu.window_line;
+        const map_y: u8 = ppu.internal.window_line;
         renderPixelDmg(
             ppu,
             map_base,
@@ -125,7 +136,11 @@ fn renderPixelDmg(
 }
 
 fn renderSpritesDmg(ppu: *Ppu) void {
-    const sprite_height: u8 = if ((ppu.internal.latched.lcd_control & 0x04) != 0) 16 else 8;
+    const sprite_height: u8 = switch (ppu.internal.latched.lcd_control.object_size) {
+        .eight_eight => 8,
+        .eight_sixteen => 16,
+    };
+
     // Scan OAM for sprites on this line (max 10)
     var sprites_on_line: [10]u8 = undefined;
     var sprite_count: u8 = 0;
@@ -140,6 +155,17 @@ fn renderSpritesDmg(ppu: *Ppu) void {
         }
     }
 
+    while (i < 10 and sprite_count < 10) : (i += 1) {
+        const oam_addr: u16 = i;
+        const sprite: types.ObjectAttribute = ppu.oam[oam_addr];
+        if ((ppu.registers.ly + 16) >= sprite.sprite_y and
+            (ppu.registers.ly + 16) < (sprite.sprite_y + sprite_height))
+        {
+            sprites_on_line[sprite_count] = sprite;
+            sprite_count += 1;
+        }
+    }
+
     if (sprite_count == 0) return;
     var sprite_n = sprite_count;
     while (sprite_n != 0) {
@@ -149,37 +175,34 @@ fn renderSpritesDmg(ppu: *Ppu) void {
         const sprite_addr: u16 = sprite_idx * 4;
 
         // break down 4 byte sprite information
-        const sprite_y: u8 = ppu.oam[sprite_addr];
-        const sprite_x: u8 = ppu.oam[sprite_addr + 1];
-        const tile_idx: u16 = ppu.oam[sprite_addr + 2];
-        const sprite_flags: u8 = ppu.oam[sprite_addr + 3];
-
-        const priority: u1 = @truncate(sprite_flags >> 7);
-        const y_flip: u1 = @truncate(sprite_flags >> 6);
-        const x_flip: u1 = @truncate(sprite_flags >> 5);
-        const dmg_palette: u1 = @truncate(sprite_flags >> 4);
+        const sprite: types.ObjectAttribute = sprites_on_line[sprite_n];
 
         var palette: [4]u32 = undefined;
-        const palette_data = if (dmg_palette == 0) ppu.latched_obp0 else ppu.latched_obp1;
-        for (0..4) |p| {
-            palette[p] = PALETTE[(palette_data >> @intCast(p * 2)) & 3];
-        }
+        const palette_data = if (!sprite.flags.dmg_palette)
+            ppu.internal.latched.dmg_object_palette_0_data
+        else
+            ppu.internal.latched.dmg_object_palette_1_data;
 
-        var pixel_y: u8 = ppu.ly + 16 - sprite_y;
-        if (y_flip == 1) pixel_y = (sprite_height - 1) - pixel_y;
+        palette[0] = dmgColourToRgb(palette_data.id_0);
+        palette[1] = dmgColourToRgb(palette_data.id_0);
+        palette[2] = dmgColourToRgb(palette_data.id_0);
+        palette[3] = dmgColourToRgb(palette_data.id_0);
 
-        const tile_addr: u16 = 0x8000 + tile_idx * 16;
+        var pixel_y: u8 = ppu.registers.ly + 16 - sprite.y_position;
+        if (sprite.flags.flipped_vertically) pixel_y = (sprite_height - 1) - pixel_y;
+
+        const tile_addr: u16 = 0x8000 + sprite.tile_index * 16;
         const byte1: u8 = ppu.read8(tile_addr + pixel_y * 2);
         const byte2: u8 = ppu.read8(tile_addr + pixel_y * 2 + 1);
 
         for (0..8) |px| {
             // skip if not on screen
-            const result = @subWithOverflow(sprite_x + px, 8);
+            const result = @subWithOverflow(sprite.x_position + px, 8);
             const screen_x: u16 = @truncate(result[0]);
             if (result[1] == 1 or screen_x >= 160) continue;
 
             var pixel_x: u8 = @truncate(px);
-            if (x_flip == 1) pixel_x = 7 - pixel_x;
+            if (sprite.flags.flipped_horizontally) pixel_x = 7 - pixel_x;
 
             // calculate the pixels position in this row of bytes, then get the color idx
             const bit_pos: u3 = @intCast(7 - pixel_x);
@@ -188,7 +211,7 @@ fn renderSpritesDmg(ppu: *Ppu) void {
             if (color_idx == 0) continue; // transparent
 
             const buffer_idx = @as(u32, ppu.ly) * 160 + screen_x;
-            if (priority == 0 or ppu.display_buffer[buffer_idx] == palette[0]) {
+            if (!sprite.flags.bg_window_has_priority or ppu.display_buffer[buffer_idx] == palette[0]) {
                 ppu.display_buffer[buffer_idx] = palette[color_idx];
             }
         }
