@@ -5,400 +5,307 @@ const Cpu = @import("../cpu/cpu.zig").Cpu;
 const Bus = @import("../bus.zig").Bus;
 const renderScanlineDmg = @import("render_dmg.zig").renderScanlineDmg;
 const renderScanlineCgb = @import("render_cgb.zig").renderScanlineCgb;
+const types = @import("ppu_types.zig");
 
-pub const Ppu = struct {
-    tile_data: [0x1800 * 2]u8, // 0x1800 * 2 banks
-    tile_map_1: [0x400 * 2]u8, // 0x400 * 2 banks
-    tile_map_2: [0x400 * 2]u8, // 0x400 * 2 banks
-    oam: [0xA0]u8, // FE00 - FE9F (fixed size)
-    lcd_control: u8, // FF40
-    stat: u8, // FF41
-    scy: u8, // FF42
-    scx: u8, // FF43
-    ly: u8, // FF44
-    lyc: u8, // FF45
-    dma: u8, // FF46
-    bgp: u8, // FF47
-    obp0: u8, // FF48
-    obp1: u8, // FF49
-    wy: u8, // FF4A
-    wx: u8, // FF4B
-    bcps: u8,
-    bcpd: u8,
-    ocps: u8,
-    ocpd: u8,
-    opri: u8,
-    window_line: u8,
-    cycles: u16,
-    interrupt_controller: *InterruptController,
-    display_buffer: [160 * 144]u32,
-    // Internal latched values
-    latched_scx: u8 = 0,
-    latched_scy: u8 = 0,
-    latched_bgp: u8 = 0,
-    latched_obp0: u8 = 0,
-    latched_obp1: u8 = 0,
-    latched_lcd_control: u8 = 0,
-    latched_wy: u8 = 0,
-    latched_wx: u8 = 0,
-    current_signal: bool = false,
-    stat_int_signal: bool = false,
+pub const Ppu = @This();
 
-    rVDMA_SRC_HIGH: u8 = 0, // HDMA1 etc
-    rVDMA_SRC_LOW: u8 = 0,
-    rVDMA_DEST_HIGH: u8 = 0,
-    rVDMA_DEST_LOW: u8 = 0,
-    rVDMA_LEN: u8 = 0,
+vram: types.Vram,
+oam: [40]types.ObjectAttribute,
+registers: types.Registers,
+dmg: types.DmgState,
+cgb: types.CgbState,
+internal: types.InternalState,
+display: types.DisplayState,
+interrupt_controller: *InterruptController,
+dma: types.Dma,
 
-    hdma_active: bool = false,
-    hdma_src: u16 = 0,
-    hdma_dest: u16 = 0,
-    hdma_remaining: u16 = 0, // in blocks of 16 bytes
-    hdma_block_active: bool = false,
-    hdma_block_step: u16 = 0,
-    //
-    cgb: bool = false,
-    vram_bank: u1 = 0,
-    bg_cram: [64]u8,
-    obj_cram: [64]u8,
-    //
-    bg_idx: [160]u2,
-    bg_palettes: [8][4]u32 = undefined,
-    obj_palettes: [8][4]u32 = undefined,
+pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
+    return Ppu{
+        .vram = .{},
+        .oam = [_]types.ObjectAttribute{.{}} ** 40,
+        .registers = .{},
+        .cgb = .{ .enabled = cgb },
+        .dmg = .{},
+        .internal = .{},
+        .display = .{},
+        .interrupt_controller = interrupt_controller,
+        .dma = .{},
+    };
+}
 
-    frame_ready: bool = false,
-
-    pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
-        return Ppu{
-            .tile_data = [_]u8{0} ** 0x3000,
-            .tile_map_1 = [_]u8{0} ** 0x800,
-            .tile_map_2 = [_]u8{0} ** 0x800,
-            .oam = [_]u8{0} ** 0xA0,
-            .lcd_control = 0x91,
-            .stat = 0x85,
-            .scy = 0,
-            .scx = 0,
-            .ly = 0,
-            .lyc = 0,
-            .dma = 0,
-            .bgp = 0xFC,
-            .obp0 = 0,
-            .obp1 = 0,
-            .wy = 0,
-            .wx = 0,
-            .bcps = 0,
-            .bcpd = 0,
-            .ocps = 0,
-            .opri = 0,
-            .ocpd = 0,
-            .window_line = 0,
-            .cycles = 0,
-            .interrupt_controller = interrupt_controller,
-            .display_buffer = [_]u32{0} ** (160 * 144),
-            .cgb = cgb,
-            .bg_cram = [_]u8{0} ** 0x40,
-            .obj_cram = [_]u8{0} ** 0x40,
-            .bg_idx = [_]u2{0} ** 160,
-        };
-    }
-
-    pub fn read8(self: *Ppu, addr: u16) u8 {
-        assert((addr >= 0x8000 and addr <= 0x9FFF) or
-            (addr >= 0xFE00 and addr <= 0xFF4F) or
-            (addr >= 0xFF68 and addr <= 0xFF6C));
-        // const current_mode = self.get_ppu_mode();
-        // if (addr >= 0x8000 and addr <= 0x9FFF and current_mode == 3) return 0xFF;
-        // if (addr >= 0xFE00 and addr <= 0xFE9F and (current_mode == 2 or current_mode == 3)) return 0xFF;
-        return switch (addr) {
-            0x8000...0x97FF => {
-                if (self.vram_bank == 0) {
-                    return self.tile_data[addr - 0x8000];
-                } else {
-                    return self.tile_data[addr - 0x8000 + 0x1800];
-                }
-            },
-            0x9800...0x9BFF => {
-                if (self.vram_bank == 0) {
-                    return self.tile_map_1[addr - 0x9800];
-                } else {
-                    return self.tile_map_1[addr - 0x9800 + 0x400];
-                }
-            },
-            0x9C00...0x9FFF => {
-                if (self.vram_bank == 0) {
-                    return self.tile_map_2[addr - 0x9C00];
-                } else {
-                    return self.tile_map_2[addr - 0x9C00 + 0x400];
-                }
-            },
-            0xFE00...0xFE9F => self.oam[addr - 0xFE00],
-            0xFF40 => self.lcd_control,
-            0xFF41 => self.stat,
-            0xFF42 => self.scy,
-            0xFF43 => self.scx,
-            0xFF44 => self.ly,
-            0xFF45 => self.lyc,
-            0xFF46 => self.dma,
-            0xFF47 => self.bgp,
-            0xFF48 => self.obp0,
-            0xFF49 => self.obp1,
-            0xFF4A => self.wy,
-            0xFF4B => self.wx,
-            0xFF4F => 0xFF & @as(u8, self.vram_bank),
-            0xFF68 => self.bcps,
-            0xFF69 => self.getBcpd(),
-            0xFF6A => self.ocps,
-            0xFF6B => self.getOcpd(),
-            0xFF6C => self.opri,
-            else => unreachable,
-        };
-    }
-
-    pub fn write8(
-        self: *Ppu,
-        addr: u16,
-        val: u8,
-    ) void {
-        assert((addr >= 0x8000 and addr <= 0x9FFF) or
-            (addr >= 0xFE00 and addr <= 0xFF4F) or
-            (addr >= 0xFF68 and addr <= 0xFF6C));
-        // const current_mode = self.get_ppu_mode();
-        // if (addr >= 0x8000 and addr <= 0x9FFF and current_mode == 3) return;
-        // if (addr >= 0xFE00 and addr <= 0xFE9F and (current_mode == 2 or current_mode == 3)) return;
-        switch (addr) {
-            0x8000...0x97FF => {
-                if (self.vram_bank == 0) {
-                    self.tile_data[addr - 0x8000] = val;
-                } else {
-                    self.tile_data[addr - 0x8000 + 0x1800] = val;
-                }
-            },
-            0x9800...0x9BFF => {
-                if (self.vram_bank == 0) {
-                    self.tile_map_1[addr - 0x9800] = val;
-                } else {
-                    self.tile_map_1[addr - 0x9800 + 0x400] = val;
-                }
-            },
-            0x9C00...0x9FFF => {
-                if (self.vram_bank == 0) {
-                    self.tile_map_2[addr - 0x9C00] = val;
-                } else {
-                    self.tile_map_2[addr - 0x9C00 + 0x400] = val;
-                }
-            },
-            0xFE00...0xFE9F => self.oam[addr - 0xFE00] = val,
-            0xFF40 => {
-                self.lcd_control = val;
-            },
-            0xFF41 => {
-                self.stat = (val & 0xF8) | (self.stat & 0x07);
-                self.handle_stat_interrupt();
-            },
-            0xFF42 => self.scy = val,
-            0xFF43 => self.scx = val,
-            0xFF44 => {},
-            0xFF45 => {
-                self.lyc = val;
-                self.handle_stat_interrupt();
-            },
-            0xFF46 => unreachable,
-            0xFF47 => self.bgp = val,
-            0xFF48 => self.obp0 = val,
-            0xFF49 => self.obp1 = val,
-            0xFF4A => self.wy = val,
-            0xFF4B => self.wx = val,
-            0xFF4F => self.vram_bank = @truncate(val),
-            0xFF68 => self.bcps = val,
-            0xFF69 => self.setBcpd(val),
-            0xFF6A => self.ocps = val,
-            0xFF6B => self.setOcpd(val),
-            0xFF6C => self.opri = val,
-            else => unreachable,
-        }
-    }
-
-    fn getBcpd(self: *Ppu) u8 {
-        const tgt_address: u6 = @truncate(self.bcps);
-        const mode: u2 = @truncate(self.stat);
-        if (mode != 3) return self.bg_cram[tgt_address];
-        return 0xFF;
-    }
-
-    fn getOcpd(self: *Ppu) u8 {
-        const tgt_address: u6 = @truncate(self.ocps);
-        const mode: u2 = @truncate(self.stat);
-        if (mode != 3) return self.obj_cram[tgt_address];
-        return 0xFF;
-    }
-
-    fn setBcpd(self: *Ppu, val: u8) void {
-        const tgt_address: u6 = @truncate(self.bcps);
-        const auto_increment: bool = (self.bcps & 0x80) == 0x80;
-
-        if (auto_increment) self.bcps =
-            (self.bcps & 0x80) | ((tgt_address +% 1) & 0x3F);
-
-        const mode: u2 = @truncate(self.stat);
-        if (mode != 3) self.bg_cram[tgt_address] = val;
-    }
-
-    fn setOcpd(self: *Ppu, val: u8) void {
-        const tgt_address: u6 = @truncate(self.ocps);
-        const auto_increment: bool = (self.ocps & 0x80) == 0x80;
-
-        if (auto_increment) self.ocps =
-            (self.ocps & 0x80) | ((tgt_address +% 1) & 0x3F);
-
-        const mode: u2 = @truncate(self.stat);
-        if (mode != 3) self.obj_cram[tgt_address] = val;
-    }
-
-    pub fn tick(self: *Ppu, bus: *Bus, cycles: u16) void {
-        if ((self.lcd_control & 0x80) == 0) {
-            self.set_ppu_mode(2);
-            self.ly = 0;
-            self.cycles = 0;
-            return;
-        }
-
-        self.cycles += cycles;
-        const mode: u2 = @truncate(self.stat);
-        switch (mode) {
-            0x00 => self.handle_hblank(bus),
-            0x01 => self.handle_vblank(),
-            0x02 => self.handle_oam_scan(),
-            0x03 => self.handle_render(),
-        }
-    }
-
-    fn handle_hblank(self: *Ppu, bus: *Bus) void {
-
-        // Transfer 1 bytes per 4 T-cycle tick
-        if (self.hdma_block_active) {
-            self.tickHdmaBlock(bus);
-        }
-
-        if (self.cycles >= 204) {
-            self.ly +%= 1;
-            self.cycles -= 204;
-            if (self.ly == 144) {
-                self.set_ppu_mode(1);
-                self.interrupt_controller.request(InterruptController.VBLANK);
-                self.frame_ready = true;
-            } else self.set_ppu_mode(2);
-
-            self.handle_stat_interrupt();
-        }
-    }
-
-    // Transfers 2 Bytes per M cycle / 4 T cycles
-    fn tickHdmaBlock(self: *Ppu, bus: *Bus) void {
-        const byte1 = bus.read8(self.hdma_src + self.hdma_block_step);
-        const byte2 = bus.read8(self.hdma_src + self.hdma_block_step + 1);
-        self.write8(self.hdma_dest + self.hdma_block_step, byte1);
-        self.write8(self.hdma_dest + self.hdma_block_step + 1, byte2);
-
-        self.hdma_block_step += 2;
-
-        if (self.hdma_block_step == 0x10) {
-            self.hdma_block_active = false;
-            self.hdma_block_step = 0;
-
-            self.hdma_src += 0x10;
-            self.hdma_dest += 0x10;
-            self.hdma_remaining -= 1;
-            self.rVDMA_LEN = @truncate(self.hdma_remaining);
-
-            if (self.hdma_remaining == 0) {
-                self.hdma_active = false;
-                self.rVDMA_LEN = 0xFF;
+pub fn read8(self: *Ppu, addr: u16) u8 {
+    assert((addr >= 0x8000 and addr <= 0x9FFF) or
+        (addr >= 0xFE00 and addr <= 0xFF4F) or
+        (addr >= 0xFF68 and addr <= 0xFF6C));
+    return switch (addr) {
+        0x8000...0x97FF => {
+            if (self.vram.bank == 0) {
+                return self.vram.tile_data[addr - 0x8000];
+            } else {
+                return self.vram.tile_data[addr - 0x8000 + 0x1800];
             }
-        }
-    }
-
-    fn handle_vblank(self: *Ppu) void {
-        if (self.cycles >= 456) {
-            self.ly +%= 1;
-            self.cycles -= 456;
-            if (self.ly > 153) {
-                self.ly = 0;
-                self.window_line = 0;
-                self.set_ppu_mode(2);
+        },
+        0x9800...0x9BFF => {
+            if (self.vram.bank == 0) {
+                return self.vram.tile_map_1[addr - 0x9800];
+            } else {
+                return self.vram.tile_map_1[addr - 0x9800 + 0x400];
             }
+        },
+        0x9C00...0x9FFF => {
+            if (self.vram.bank == 0) {
+                return self.vram.tile_map_2[addr - 0x9C00];
+            } else {
+                return self.vram.tile_map_2[addr - 0x9C00 + 0x400];
+            }
+        },
+        0xFE00...0xFE9F => std.mem.asBytes(&self.oam)[addr - 0xFE00],
+        0xFF40 => @bitCast(self.registers.lcd_control),
+        0xFF41 => @bitCast(self.registers.stat),
+        0xFF42 => self.registers.scroll_y,
+        0xFF43 => self.registers.scroll_x,
+        0xFF44 => self.registers.ly,
+        0xFF45 => self.registers.lyc,
+        0xFF46 => 0xFF, // maybe dma
+        0xFF47 => @bitCast(self.dmg.bg_palette_data),
+        0xFF48 => @bitCast(self.dmg.object_palette_0_data),
+        0xFF49 => @bitCast(self.dmg.object_palette_1_data),
+        0xFF4A => self.registers.wx,
+        0xFF4B => self.registers.wy,
+        0xFF4F => @as(u8, self.vram.bank),
+        0xFF68 => @bitCast(self.cgb.bg_palette_idx),
+        0xFF69 => self.getCgbBgPaletteData(),
+        0xFF6A => @bitCast(self.cgb.object_palette_idx),
+        0xFF6B => self.getCgbObjPaletteData(),
+        0xFF6C => @intFromEnum(self.cgb.object_priority_mode),
+        else => unreachable,
+    };
+}
 
+pub fn write8(
+    self: *Ppu,
+    addr: u16,
+    val: u8,
+) void {
+    assert((addr >= 0x8000 and addr <= 0x9FFF) or
+        (addr >= 0xFE00 and addr <= 0xFF4F) or
+        (addr >= 0xFF68 and addr <= 0xFF6C));
+    switch (addr) {
+        0x8000...0x97FF => {
+            if (self.vram.bank == 0) {
+                self.vram.tile_data[addr - 0x8000] = val;
+            } else {
+                self.vram.tile_data[addr - 0x8000 + 0x1800] = val;
+            }
+        },
+        0x9800...0x9BFF => {
+            if (self.vram.bank == 0) {
+                self.vram.tile_map_1[addr - 0x9800] = val;
+            } else {
+                self.vram.tile_map_1[addr - 0x9800 + 0x400] = val;
+            }
+        },
+        0x9C00...0x9FFF => {
+            if (self.vram.bank == 0) {
+                self.vram.tile_map_2[addr - 0x9C00] = val;
+            } else {
+                self.vram.tile_map_2[addr - 0x9C00 + 0x400] = val;
+            }
+        },
+        0xFE00...0xFE9F => std.mem.asBytes(&self.oam)[addr - 0xFE00] = val,
+        0xFF40 => self.registers.lcd_control = @bitCast(val),
+        0xFF41 => {
+            const written: types.LcdStatus = @bitCast(val);
+            self.registers.stat.hblank_intr_selected = written.hblank_intr_selected;
+            self.registers.stat.vblank_intr_selected = written.vblank_intr_selected;
+            self.registers.stat.oam_scan_intr_selected = written.oam_scan_intr_selected;
+            self.registers.stat.lyc_equals_ly_intr_selected = written.lyc_equals_ly_intr_selected;
             self.handle_stat_interrupt();
-        }
-    }
-
-    fn handle_oam_scan(self: *Ppu) void {
-        if (self.cycles >= 80) {
-            self.latched_scx = self.scx;
-            self.latched_scy = self.scy;
-            self.latched_bgp = self.bgp;
-            self.latched_obp0 = self.obp0;
-            self.latched_obp1 = self.obp1;
-            self.latched_lcd_control = self.lcd_control;
-            self.latched_wx = self.wx;
-            self.latched_wy = self.wy;
-            self.set_ppu_mode(3);
-            self.cycles -= 80;
-
+        },
+        0xFF42 => self.registers.scroll_y = val,
+        0xFF43 => self.registers.scroll_x = val,
+        0xFF44 => {},
+        0xFF45 => {
+            self.registers.lyc = val;
             self.handle_stat_interrupt();
-        }
+        },
+        0xFF46 => unreachable,
+        0xFF47 => self.dmg.bg_palette_data = @bitCast(val),
+        0xFF48 => self.dmg.object_palette_0_data = @bitCast(val),
+        0xFF49 => self.dmg.object_palette_1_data = @bitCast(val),
+        0xFF4A => self.registers.wy = val,
+        0xFF4B => self.registers.wx = val,
+        0xFF4F => self.vram.bank = @truncate(val),
+        0xFF68 => self.cgb.bg_palette_idx = @bitCast(val),
+        0xFF69 => self.setCgbBgPaletteData_data(val),
+        0xFF6A => self.cgb.object_palette_idx = @bitCast(val),
+        0xFF6B => self.setCgbObjPaletteData(val),
+        0xFF6C => self.cgb.object_priority_mode = @enumFromInt(val),
+        else => unreachable,
+    }
+}
+
+fn getCgbBgPaletteData(self: *Ppu) u8 {
+    if (self.registers.stat.ppu_mode != .pixel_transfer) return 0xFF;
+    const tgt_address: u6 = self.cgb.bg_palette_idx.palette_address;
+    return self.cgb.bg_cram[tgt_address];
+}
+
+fn getCgbObjPaletteData(self: *Ppu) u8 {
+    if (self.registers.stat.ppu_mode == .pixel_transfer) return 0xFF;
+    const tgt_address: u6 = self.cgb.object_palette_idx.palette_address;
+    return self.cgb.object_cram[tgt_address];
+}
+
+fn setCgbBgPaletteData_data(self: *Ppu, val: u8) void {
+    if (self.registers.stat.ppu_mode == .pixel_transfer) return;
+    const tgt_address: u6 = self.cgb.bg_palette_idx.palette_address;
+
+    if (self.cgb.bg_palette_idx.auto_increment)
+        self.cgb.bg_palette_idx.palette_address +%= 1;
+
+    self.cgb.bg_cram[tgt_address] = val;
+}
+
+fn setCgbObjPaletteData(self: *Ppu, val: u8) void {
+    if (self.registers.stat.ppu_mode == .pixel_transfer) return;
+    const tgt_address: u6 = self.cgb.object_palette_idx.palette_address;
+
+    if (self.cgb.object_palette_idx.auto_increment)
+        self.cgb.object_palette_idx.palette_address +%= 1;
+
+    self.cgb.bg_cram[tgt_address] = val;
+}
+
+pub fn tick(self: *Ppu, bus: *Bus, cycles: u16) void {
+    if (self.registers.lcd_control.lcd_ppu_enabled) {
+        self.registers.stat.ppu_mode = .oam_scan;
+        self.registers.ly = 0;
+        self.internal.cycles = 0;
+        return;
     }
 
-    fn handle_render(self: *Ppu) void {
-        if (self.cycles >= 172) {
-            if (self.cgb)
-                renderScanlineCgb(self)
-            else
-                renderScanlineDmg(self);
+    self.internal.cycles += cycles;
+    switch (self.registers.stat.ppu_mode) {
+        .hblank => self.handle_hblank(bus),
+        .vblank => self.handle_vblank(),
+        .oam_scan => self.handle_oam_scan(),
+        .pixel_transfer => self.handle_render(),
+    }
+}
 
-            self.set_ppu_mode(0);
-            if (self.hdma_active) self.hdma_block_active = true;
+fn handle_hblank(self: *Ppu, bus: *Bus) void {
 
-            self.cycles -= 172;
-
-            self.handle_stat_interrupt();
-        }
+    // Transfer 1 bytes per 4 T-cycle tick
+    if (self.dma.block_active) {
+        self.tickHdmaBlock(bus);
     }
 
-    fn handle_stat_interrupt(self: *Ppu) void {
-        if (self.ly == self.lyc) {
-            self.stat |= 0x04;
-        } else {
-            self.stat &= ~@as(u8, 0x04);
+    if (self.internal.cycles >= 204) {
+        self.registers.ly +%= 1;
+        self.internal.cycles -= 204;
+        if (self.registers.ly == 144) {
+            self.registers.stat.ppu_mode = .vblank;
+            self.interrupt_controller.request(InterruptController.VBLANK);
+            self.display.frame_ready = true;
+        } else self.registers.stat.ppu_mode = .oam_scan;
+
+        self.handle_stat_interrupt();
+    }
+}
+
+// Transfers 2 Bytes per M cycle / 4 T cycles
+fn tickHdmaBlock(self: *Ppu, bus: *Bus) void {
+    const byte1 = bus.read8(self.dma.src + self.dma.block_step);
+    const byte2 = bus.read8(self.dma.src + self.dma.block_step + 1);
+    self.write8(self.dma.dest + self.dma.block_step, byte1);
+    self.write8(self.dma.dest + self.dma.block_step + 1, byte2);
+
+    self.dma.block_step += 2;
+
+    if (self.dma.block_step == 0x10) {
+        self.dma.block_active = false;
+        self.dma.block_step = 0;
+
+        self.dma.src += 0x10;
+        self.dma.dest += 0x10;
+        self.dma.remaining -= 1;
+        self.dma.rVDMA_LEN = @truncate(self.dma.remaining);
+
+        if (self.dma.remaining == 0) {
+            self.dma.is_active = false;
+            self.dma.rVDMA_LEN = 0xFF;
+        }
+    }
+}
+
+fn handle_vblank(self: *Ppu) void {
+    if (self.internal.cycles >= 456) {
+        self.registers.ly +%= 1;
+        self.internal.cycles -= 456;
+        if (self.registers.ly > 153) {
+            self.registers.ly = 0;
+            self.internal.window_line = 0;
+            self.registers.stat.ppu_mode = .oam_scan;
         }
 
-        self.current_signal = false;
+        self.handle_stat_interrupt();
+    }
+}
 
-        const bit_6: bool = @as(u1, @truncate(self.stat >> 6)) == 1;
-        const bit_5: bool = @as(u1, @truncate(self.stat >> 5)) == 1;
-        const bit_4: bool = @as(u1, @truncate(self.stat >> 4)) == 1;
-        const bit_3: bool = @as(u1, @truncate(self.stat >> 3)) == 1;
-        const mode: u2 = @truncate(self.stat);
+fn handle_oam_scan(self: *Ppu) void {
+    if (self.internal.cycles >= 80) {
+        self.internal.latched.scroll_x = self.registers.scroll_x;
+        self.internal.latched.scroll_y = self.registers.scroll_y;
+        self.internal.latched.dmg_bg_palette_data = self.dmg.bg_palette_data;
+        self.internal.latched.dmg_object_palette_0_data = self.dmg.object_palette_0_data;
+        self.internal.latched.dmg_object_palette_1_data = self.dmg.object_palette_1_data;
+        self.internal.latched.lcd_control = self.registers.lcd_control;
+        self.internal.latched.wx = self.registers.wx;
+        self.internal.latched.wy = self.registers.wy;
+        self.registers.stat.ppu_mode = .pixel_transfer;
+        self.internal.cycles -= 80;
 
-        if ((bit_6 and self.lyc == self.ly) or
-            (bit_5 and mode == 2) or
-            (bit_4 and mode == 1) or
-            (bit_3 and mode == 0))
-        {
-            self.current_signal = true;
-        }
+        self.handle_stat_interrupt();
+    }
+}
 
-        if (self.current_signal and !self.stat_int_signal) { // rising edge
-            self.interrupt_controller.request(InterruptController.LCD_STAT);
-        }
+fn handle_render(self: *Ppu) void {
+    if (self.internal.cycles >= 172) {
+        if (self.cgb.enabled)
+            renderScanlineCgb(self)
+        else
+            renderScanlineDmg(self);
 
-        self.stat_int_signal = self.current_signal;
+        self.registers.stat.ppu_mode = .hblank;
+        if (self.dma.is_active) self.dma.block_active = true;
+
+        self.internal.cycles -= 172;
+
+        self.handle_stat_interrupt();
+    }
+}
+
+fn handle_stat_interrupt(self: *Ppu) void {
+    if (self.registers.ly == self.registers.lyc) {
+        self.registers.stat.lyc_equals_ly = true;
+    } else {
+        self.registers.stat.lyc_equals_ly = false;
     }
 
-    fn set_ppu_mode(self: *Ppu, mode: u2) void {
-        self.stat = (self.stat & 0xFC) | mode;
+    self.internal.current_signal = false;
+
+    self.internal.current_signal = if ((self.registers.stat.lyc_equals_ly_intr_selected and self.registers.stat.lyc_equals_ly) or
+        switch (self.registers.stat.ppu_mode) {
+            .hblank => self.registers.stat.hblank_intr_selected,
+            .vblank => self.registers.stat.hblank_intr_selected,
+            .oam_scan => self.registers.stat.oam_scan_intr_selected,
+            .pixel_transfer => false,
+        }) true else false;
+
+    if (self.internal.current_signal and !self.internal.stat_int_signal) { // rising edge
+        self.interrupt_controller.request(InterruptController.LCD_STAT);
     }
 
-    fn get_ppu_mode(self: *Ppu) u2 {
-        return @truncate(self.stat);
-    }
-};
+    self.internal.stat_int_signal = self.internal.current_signal;
+}

@@ -63,7 +63,8 @@ pub fn step(
         return;
     }
 
-    if (self.ppu.hdma_block_active) {
+    // Don't execute any instruction if hdma is active
+    if (self.ppu.dma.is_active) {
         self.cpu.tick();
         return;
     }

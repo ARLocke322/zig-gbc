@@ -1,31 +1,42 @@
 const Ppu = @import("ppu.zig").Ppu;
 const assert = @import("std").debug.assert;
 const PALETTE: [4]u32 = .{ 0xFFE0F8D0, 0xFF88C070, 0xFF346856, 0xFF081820 };
+const types = @import("ppu_types.zig");
 
 pub fn renderScanlineDmg(ppu: *Ppu) void {
     renderBackgroundDmg(ppu);
-    if ((ppu.latched_lcd_control & 0x20) != 0 and
+    if ((ppu.internal.latched.lcd_control & 0x20) != 0 and
         ppu.ly >= ppu.latched_wy and
-        ppu.latched_wx <= 159) renderWindowDmg(ppu);
-    if ((ppu.latched_lcd_control & 0x2) != 0) renderSpritesDmg(ppu);
+        ppu.internal.latched.wx <= 159) renderWindowDmg(ppu);
+    if ((ppu.internal.latched.lcd_control & 0x2) != 0) renderSpritesDmg(ppu);
 }
 
 fn renderBackgroundDmg(ppu: *Ppu) void {
     // starting addr of background tilemap, 2 possible regions
-    const map_base: u16 = if ((ppu.latched_lcd_control & 0x08) != 0) 0x9C00 else 0x9800;
+    const map_base: u16 = if (ppu.internal.latched.lcd_control.bg_tile_map_area == 0)
+        0x9800
+    else
+        0x9C00;
+
     // starting addr of tile, 2 possible tiles
-    const tile_base: u16 = if ((ppu.latched_lcd_control & 0x10) != 0) 0x8000 else 0x9000;
-    const use_unsigned_tiles = (ppu.latched_lcd_control & 0x10) != 0;
+    const tile_base: u16 = if (ppu.internal.latched.lcd_control.bg_window_tile_data_area == 0)
+        0x9000
+    else
+        0x8000;
+
+    const use_unsigned_tiles =
+        (ppu.internal.latched.lcd_control.bg_window_tile_data_area == 1);
 
     var palette: [4]u32 = undefined;
-    for (0..4) |i| {
-        palette[i] = PALETTE[(ppu.latched_bgp >> @intCast(i * 2)) & 3];
-    }
+    palette[0] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_0);
+    palette[1] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_1);
+    palette[2] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_2);
+    palette[3] = dmgColourToRgb(ppu.internal.latched.bg_palette.id_3);
 
     for (0..160) |x| {
         // absolute x and y positions with scroll
-        const map_x: u8 = @as(u8, @truncate(x)) +% ppu.latched_scx;
-        const map_y: u8 = ppu.ly +% ppu.latched_scy;
+        const map_x: u8 = @as(u8, @truncate(x)) +% ppu.internal.latched.scroll_x;
+        const map_y: u8 = ppu.registers.ly +% ppu.internal.latched.scroll_y;
         renderPixelDmg(
             ppu,
             map_base,
@@ -40,16 +51,16 @@ fn renderBackgroundDmg(ppu: *Ppu) void {
 }
 
 fn renderWindowDmg(ppu: *Ppu) void {
-    const map_base: u16 = if ((ppu.latched_lcd_control & 0x40) != 0) 0x9C00 else 0x9800;
-    const tile_base: u16 = if ((ppu.latched_lcd_control & 0x10) != 0) 0x8000 else 0x9000;
-    const use_unsigned_tiles = (ppu.latched_lcd_control & 0x10) != 0;
+    const map_base: u16 = if ((ppu.internal.latched.lcd_control & 0x40) != 0) 0x9C00 else 0x9800;
+    const tile_base: u16 = if ((ppu.internal.latched.lcd_control & 0x10) != 0) 0x8000 else 0x9000;
+    const use_unsigned_tiles = (ppu.internal.latched.lcd_control & 0x10) != 0;
     var palette: [4]u32 = undefined;
     for (0..4) |i| {
         palette[i] = PALETTE[(ppu.latched_bgp >> @intCast(i * 2)) & 3];
     }
 
-    const window_x_start: u8 = if (ppu.latched_wx > 7) ppu.latched_wx - 7 else 0;
-    const window_x_offset: u8 = if (ppu.latched_wx >= 7) 0 else 7 - ppu.latched_wx;
+    const window_x_start: u8 = if (ppu.internal.latched.wx > 7) ppu.internal.latched.wx - 7 else 0;
+    const window_x_offset: u8 = if (ppu.internal.latched.wx >= 7) 0 else 7 - ppu.internal.latched.wx;
 
     for (0..160) |x| {
         if (@as(u8, @truncate(x)) < window_x_start) continue;
@@ -114,7 +125,7 @@ fn renderPixelDmg(
 }
 
 fn renderSpritesDmg(ppu: *Ppu) void {
-    const sprite_height: u8 = if ((ppu.latched_lcd_control & 0x04) != 0) 16 else 8;
+    const sprite_height: u8 = if ((ppu.internal.latched.lcd_control & 0x04) != 0) 16 else 8;
     // Scan OAM for sprites on this line (max 10)
     var sprites_on_line: [10]u8 = undefined;
     var sprite_count: u8 = 0;
@@ -182,4 +193,13 @@ fn renderSpritesDmg(ppu: *Ppu) void {
             }
         }
     }
+}
+
+fn dmgColourToRgb(colour: types.DmaColour) u32 {
+    return switch (colour) {
+        .white => 0xFFFFFFFF,
+        .light_gray => 0xFFAAAAAA,
+        .dark_gray => 0xFF555555,
+        .black => 0xFF000000,
+    };
 }
