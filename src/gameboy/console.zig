@@ -1,5 +1,5 @@
 const Cpu = @import("./cpu/cpu.zig").Cpu;
-const Ppu = @import("ppu.zig").Ppu;
+const Ppu = @import("./ppu/ppu.zig").Ppu;
 const Bus = @import("bus.zig").Bus;
 const Cartridge = @import("../cartridge/MBC1.zig").MBC1;
 const Timer = @import("timer.zig").Timer;

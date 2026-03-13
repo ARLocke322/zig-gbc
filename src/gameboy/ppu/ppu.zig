@@ -1,8 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const InterruptController = @import("interrupt_controller.zig").InterruptController;
-const Cpu = @import("./cpu/cpu.zig").Cpu;
-const Bus = @import("bus.zig").Bus;
+const InterruptController = @import("../interrupt_controller.zig").InterruptController;
+const Cpu = @import("../cpu/cpu.zig").Cpu;
+const Bus = @import("../bus.zig").Bus;
 const renderScanlineDmg = @import("render_dmg.zig").renderScanlineDmg;
 const renderScanlineCgb = @import("render_cgb.zig").renderScanlineCgb;
 
@@ -109,8 +109,6 @@ pub const Ppu = struct {
         // const current_mode = self.get_ppu_mode();
         // if (addr >= 0x8000 and addr <= 0x9FFF and current_mode == 3) return 0xFF;
         // if (addr >= 0xFE00 and addr <= 0xFE9F and (current_mode == 2 or current_mode == 3)) return 0xFF;
-        if (self.hdma_block_active and addr >= 0x8000 and addr <= 0x9FFF) return 0xFF;
-
         return switch (addr) {
             0x8000...0x97FF => {
                 if (self.vram_bank == 0) {

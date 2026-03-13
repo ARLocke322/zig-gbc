@@ -2,7 +2,7 @@ const std = @import("std");
 const Cartridge = @import("../cartridge/cartridge.zig").Cartridge;
 const Timer = @import("timer.zig").Timer;
 const InterruptController = @import("interrupt_controller.zig").InterruptController;
-const Ppu = @import("ppu.zig").Ppu;
+const Ppu = @import("./ppu/ppu.zig").Ppu;
 const Joypad = @import("joypad.zig").Joypad;
 const Cpu = @import("./cpu/cpu.zig").Cpu;
 const Apu = @import("apu/apu.zig").Apu;
@@ -95,10 +95,12 @@ pub const Bus = struct {
             0xFF4C...0xFF4D => 0xFF, // KEY CGB
             0xFF4F => self.ppu.read8(address),
             0xFF5F => {
-                if (self.ppu.hdma_active) {
-                    return @as(u8, @truncate(self.ppu.hdma_remaining));
-                } else if (self.gdma_active) {
-                    return @as(u8, @truncate(self.gdma_num_bytes - self.gdma_step));
+                if (self.cgb) {
+                    if (self.ppu.hdma_active) {
+                        return @as(u8, @truncate(self.ppu.hdma_remaining));
+                    } else if (self.gdma_active) {
+                        return @as(u8, @truncate(self.gdma_num_bytes - self.gdma_step));
+                    }
                 }
                 return 0xFF;
             },
@@ -117,7 +119,6 @@ pub const Bus = struct {
             0x8000...0x9FFF => self.ppu.write8(address, value),
             0xA000...0xBFFF => self.cartridge.write(address, value),
             0xC000...0xCFFF => self.wram_0[address - 0xC000] = value,
-            // 0xD000...0xDFFF => self.wram_n[address - 0xD000] = value,
             0xD000...0xDFFF => {
                 const ix = (address - 0xD000) + (@as(usize, self.wbk) - 1) * 0x1000;
                 self.wram_n[ix] = value;

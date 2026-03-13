@@ -50,3 +50,4 @@
 - [x] Full cycle accuracy
 - [x] Refactor CPU instruction interface
 - [x] APU
+- [x] Cycle accurate DMA
