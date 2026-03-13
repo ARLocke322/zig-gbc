@@ -2,7 +2,7 @@ const std = @import("std");
 const Cartridge = @import("../cartridge/cartridge.zig").Cartridge;
 const Timer = @import("timer.zig").Timer;
 const InterruptController = @import("interrupt_controller.zig").InterruptController;
-const Ppu = @import("ppu.zig").Ppu;
+const Ppu = @import("./ppu/ppu.zig").Ppu;
 const Joypad = @import("joypad.zig").Joypad;
 const Cpu = @import("./cpu/cpu.zig").Cpu;
 const Apu = @import("apu/apu.zig").Apu;
@@ -95,10 +95,12 @@ pub const Bus = struct {
             0xFF4C...0xFF4D => 0xFF, // KEY CGB
             0xFF4F => self.ppu.read8(address),
             0xFF5F => {
-                if (self.ppu.hdma_active) {
-                    return @as(u8, @truncate(self.ppu.hdma_remaining));
-                } else if (self.gdma_active) {
-                    return @as(u8, @truncate(self.gdma_num_bytes - self.gdma_step));
+                if (self.cgb) {
+                    if (self.ppu.dma.is_active) {
+                        return @as(u8, @truncate(self.ppu.dma.remaining));
+                    } else if (self.gdma_active) {
+                        return @as(u8, @truncate(self.gdma_num_bytes - self.gdma_step));
+                    }
                 }
                 return 0xFF;
             },
@@ -117,7 +119,6 @@ pub const Bus = struct {
             0x8000...0x9FFF => self.ppu.write8(address, value),
             0xA000...0xBFFF => self.cartridge.write(address, value),
             0xC000...0xCFFF => self.wram_0[address - 0xC000] = value,
-            // 0xD000...0xDFFF => self.wram_n[address - 0xD000] = value,
             0xD000...0xDFFF => {
                 const ix = (address - 0xD000) + (@as(usize, self.wbk) - 1) * 0x1000;
                 self.wram_n[ix] = value;
@@ -138,7 +139,7 @@ pub const Bus = struct {
             0xFF10...0xFF3F => self.apu.write(address, value),
             0xFF40...0xFF45, 0xFF47...0xFF4B => self.ppu.write8(address, value),
             0xFF46 => {
-                self.ppu.dma = value; // Store DMA register
+                // self.ppu.dma = value; // Store DMA register
                 self.dma_active = true;
                 self.dma_source = @as(u16, value) << 8;
             },
@@ -146,34 +147,34 @@ pub const Bus = struct {
             0xFF4F => self.ppu.write8(address, value),
             0xFF50 => {}, // Boot ROM mapping control
             0xFF51 => {
-                if (self.cgb) self.ppu.rVDMA_SRC_HIGH = value;
+                if (self.cgb) self.ppu.dma.rVDMA_SRC_HIGH = value;
             },
             0xFF52 => {
-                if (self.cgb) self.ppu.rVDMA_SRC_LOW = value;
+                if (self.cgb) self.ppu.dma.rVDMA_SRC_LOW = value;
             },
             0xFF53 => {
-                if (self.cgb) self.ppu.rVDMA_DEST_HIGH = value;
+                if (self.cgb) self.ppu.dma.rVDMA_DEST_HIGH = value;
             },
             0xFF54 => {
-                if (self.cgb) self.ppu.rVDMA_DEST_LOW = value;
+                if (self.cgb) self.ppu.dma.rVDMA_DEST_LOW = value;
             },
             0xFF55 => {
                 // initidate rVDMA
                 if (self.cgb) {
-                    self.ppu.rVDMA_LEN = value;
+                    self.ppu.dma.rVDMA_LEN = value;
                     const transfer_mode: u1 = @truncate(value >> 7);
 
-                    if (transfer_mode == 0 and self.ppu.hdma_active) {
-                        self.ppu.hdma_active = false;
+                    if (transfer_mode == 0 and self.ppu.dma.is_active) {
+                        self.ppu.dma.is_active = false;
                         return;
                     }
 
                     const src_addr: u16 = 0xFFF0 & // bottom 4 bits ignored
-                        ((@as(u16, self.ppu.rVDMA_SRC_HIGH) << 8) |
-                            (self.ppu.rVDMA_SRC_LOW));
+                        ((@as(u16, self.ppu.dma.rVDMA_SRC_HIGH) << 8) |
+                            (self.ppu.dma.rVDMA_SRC_LOW));
                     const dest_addr: u16 = 0x8000 | (0x1FF0 & // only 12-4 respected
-                        ((@as(u16, self.ppu.rVDMA_DEST_HIGH) << 8) |
-                            (self.ppu.rVDMA_DEST_LOW)));
+                        ((@as(u16, self.ppu.dma.rVDMA_DEST_HIGH) << 8) |
+                            (self.ppu.dma.rVDMA_DEST_LOW)));
 
                     const num_blocks: u16 = @as(u16, value & 0x7F) + 1;
                     const num_bytes: u16 = num_blocks * 0x10;
@@ -185,10 +186,10 @@ pub const Bus = struct {
                         self.gdma_step = 0;
                         self.gdma_active = true;
                     } else {
-                        self.ppu.hdma_active = true;
-                        self.ppu.hdma_src = src_addr;
-                        self.ppu.hdma_dest = dest_addr;
-                        self.ppu.hdma_remaining = num_blocks;
+                        self.ppu.dma.is_active = true;
+                        self.ppu.dma.src = src_addr;
+                        self.ppu.dma.dest = dest_addr;
+                        self.ppu.dma.remaining = num_blocks;
                     }
                 }
             },
@@ -207,7 +208,7 @@ pub const Bus = struct {
     }
     pub fn tickDma(self: *Bus) void {
         const byte = self.read8(self.dma_source + self.dma_step);
-        self.ppu.oam[self.dma_step] = byte;
+        std.mem.asBytes(&self.ppu.oam)[self.dma_step] = byte;
         self.dma_step += 1;
         if (self.dma_step == 0xA0) {
             self.dma_active = false;

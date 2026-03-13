@@ -94,12 +94,12 @@ pub const Window = struct {
                 }
             }
 
-            if (gb.ppu.frame_ready) {
-                gb.ppu.frame_ready = false;
+            if (gb.ppu.display.frame_ready) {
+                gb.ppu.display.frame_ready = false;
                 _ = SDL.SDL_UpdateTexture(
                     self.texture,
                     null,
-                    @ptrCast(&gb.ppu.display_buffer),
+                    @ptrCast(&gb.ppu.display.display_buffer),
                     WIDTH * @sizeOf(u32),
                 );
                 _ = SDL.SDL_RenderClear(self.renderer);
