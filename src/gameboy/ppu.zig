@@ -109,6 +109,8 @@ pub const Ppu = struct {
         // const current_mode = self.get_ppu_mode();
         // if (addr >= 0x8000 and addr <= 0x9FFF and current_mode == 3) return 0xFF;
         // if (addr >= 0xFE00 and addr <= 0xFE9F and (current_mode == 2 or current_mode == 3)) return 0xFF;
+        if (self.hdma_block_active and addr >= 0x8000 and addr <= 0x9FFF) return 0xFF;
+
         return switch (addr) {
             0x8000...0x97FF => {
                 if (self.vram_bank == 0) {
@@ -273,15 +275,13 @@ pub const Ppu = struct {
     }
 
     fn handle_hblank(self: *Ppu, bus: *Bus) void {
+
+        // Transfer 1 bytes per 4 T-cycle tick
+        if (self.hdma_block_active) {
+            self.tickHdmaBlock(bus);
+        }
+
         if (self.cycles >= 204) {
-            if (self.hdma_active and self.ly < 144) {
-                if (self.hdma_block_active) {
-                    self.tickHdmaBlock(bus);
-                } else if (self.cycles >= 76) {
-                    self.hdma_block_active = true;
-                    self.tickHdmaBlock(bus);
-                }
-            }
             self.ly +%= 1;
             self.cycles -= 204;
             if (self.ly == 144) {
@@ -294,10 +294,14 @@ pub const Ppu = struct {
         }
     }
 
+    // Transfers 2 Bytes per M cycle / 4 T cycles
     fn tickHdmaBlock(self: *Ppu, bus: *Bus) void {
-        const byte = bus.read8(self.hdma_src + self.hdma_block_step);
-        self.write8(self.hdma_dest + self.hdma_block_step, byte);
-        self.hdma_block_step += 1;
+        const byte1 = bus.read8(self.hdma_src + self.hdma_block_step);
+        const byte2 = bus.read8(self.hdma_src + self.hdma_block_step + 1);
+        self.write8(self.hdma_dest + self.hdma_block_step, byte1);
+        self.write8(self.hdma_dest + self.hdma_block_step + 1, byte2);
+
+        self.hdma_block_step += 2;
 
         if (self.hdma_block_step == 0x10) {
             self.hdma_block_active = false;
@@ -306,9 +310,11 @@ pub const Ppu = struct {
             self.hdma_src += 0x10;
             self.hdma_dest += 0x10;
             self.hdma_remaining -= 1;
+            self.rVDMA_LEN = @truncate(self.hdma_remaining);
 
             if (self.hdma_remaining == 0) {
                 self.hdma_active = false;
+                self.rVDMA_LEN = 0xFF;
             }
         }
     }
@@ -352,6 +358,8 @@ pub const Ppu = struct {
                 renderScanlineDmg(self);
 
             self.set_ppu_mode(0);
+            if (self.hdma_active) self.hdma_block_active = true;
+
             self.cycles -= 172;
 
             self.handle_stat_interrupt();

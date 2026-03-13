@@ -63,6 +63,11 @@ pub fn step(
         return;
     }
 
+    if (self.ppu.hdma_block_active) {
+        self.cpu.tick();
+        return;
+    }
+
     // FDE for next instruction
     if (!self.cpu.halted) {
         const opcode = self.cpu.fetch();

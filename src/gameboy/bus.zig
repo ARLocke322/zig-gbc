@@ -94,6 +94,14 @@ pub const Bus = struct {
             0xFF40...0xFF4B => self.ppu.read8(address),
             0xFF4C...0xFF4D => 0xFF, // KEY CGB
             0xFF4F => self.ppu.read8(address),
+            0xFF5F => {
+                if (self.ppu.hdma_active) {
+                    return @as(u8, @truncate(self.ppu.hdma_remaining));
+                } else if (self.gdma_active) {
+                    return @as(u8, @truncate(self.gdma_num_bytes - self.gdma_step));
+                }
+                return 0xFF;
+            },
             0xFF68...0xFF6C => self.ppu.read8(address),
             0xFF70 => @as(u8, self.wbk),
 
@@ -152,6 +160,7 @@ pub const Bus = struct {
             0xFF55 => {
                 // initidate rVDMA
                 if (self.cgb) {
+                    self.ppu.rVDMA_LEN = value;
                     const transfer_mode: u1 = @truncate(value >> 7);
 
                     if (transfer_mode == 0 and self.ppu.hdma_active) {
@@ -208,8 +217,12 @@ pub const Bus = struct {
     }
 
     pub fn tickGdma(self: *Bus) void {
-        const byte = self.read8(self.gdma_source + self.gdma_step);
-        self.ppu.write8(self.gdma_dest + self.gdma_step, byte);
+        const byte1 = self.read8(self.gdma_source + self.gdma_step);
+        const byte2 = self.read8(self.gdma_source + self.gdma_step + 1);
+        self.ppu.write8(self.gdma_dest + self.gdma_step, byte1);
+        self.ppu.write8(self.gdma_dest + self.gdma_step + 1, byte2);
+        self.gdma_step += 2;
+
         if (self.gdma_step == self.gdma_num_bytes) {
             self.gdma_active = false;
             self.gdma_source = 0;
