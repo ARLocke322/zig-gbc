@@ -87,14 +87,14 @@ pub const Dma = struct {
 
 // PPU Registers
 pub const LcdControl = packed struct(u8) {
-    bg_window_enabled_or_sprite_priority: bool = false,
+    bg_window_enabled_or_sprite_priority: bool = true,
     objects_enabled: bool = false,
     object_size: enum(u1) { eight_eight = 0, eight_sixteen = 1 } = .eight_eight,
     bg_tile_map_area: u1 = 0,
-    bg_window_tile_data_area: u1 = 0,
+    bg_window_tile_data_area: u1 = 1,
     window_enabled: bool = false,
     window_tile_map_area: u1 = 0,
-    lcd_ppu_enabled: bool = false,
+    lcd_ppu_enabled: bool = true,
 };
 
 pub const LcdStatus = packed struct(u8) {
