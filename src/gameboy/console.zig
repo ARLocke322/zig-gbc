@@ -54,17 +54,11 @@ pub fn step(
         self.bus.tickDma();
         self.cpu.tick();
         return;
-    }
-
-    // Don't execute any instruciton if gdma is active
-    if (self.bus.gdma_active) {
+    } else if (self.bus.gdma_active) {
         self.bus.tickGdma();
         self.cpu.tick();
         return;
-    }
-
-    // Don't execute any instruction if hdma is active
-    if (self.ppu.dma.is_active) {
+    } else if (self.ppu.dma.block_active) {
         self.cpu.tick();
         return;
     }

@@ -179,7 +179,7 @@ fn setCgbObjPaletteData(self: *Ppu, val: u8) void {
 
 pub fn tick(self: *Ppu, bus: *Bus, cycles: u16) void {
     if (!self.registers.lcd_control.lcd_ppu_enabled) {
-        self.registers.stat.ppu_mode = .oam_scan;
+        self.registers.stat.ppu_mode = .hblank;
         self.registers.ly = 0;
         self.internal.cycles = 0;
         return;

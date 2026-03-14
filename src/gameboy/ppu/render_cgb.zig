@@ -1,5 +1,4 @@
 const Ppu = @import("ppu.zig").Ppu;
-const assert = @import("std").debug.assert;
 const PALETTE: [4]u32 = .{ 0xFFE0F8D0, 0xFF88C070, 0xFF346856, 0xFF081820 };
 const types = @import("ppu_types.zig");
 
