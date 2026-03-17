@@ -1,4 +1,4 @@
-# zig-gameboy
+# zig-gbc
 
 A Cycle-Accurate Game Boy Colour emulator written in Zig.
 
