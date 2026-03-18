@@ -1,6 +1,6 @@
 # zig-gbc
 
-A Cycle-Accurate Game Boy Colour emulator written in Zig.
+🕹️ A Cycle-Accurate Game Boy Colour emulator written in Zig.
 
 ![Demo](demo.gif) ![Demo](demo2.gif) 
 ![Demo](demo3.gif) ![Demo](demo4.gif) 
@@ -46,4 +46,4 @@ zig build run
 - Additional MBCs
 
 ## Test Roms
-- Passes Blargg cpu instructions and instruction timing tests
+- Passes Blargg cpu instructions, instruction timing, interrupt timing, and memory timing tests
