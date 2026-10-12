@@ -147,7 +147,7 @@ pub const MBC3 = struct {
 // --- TESTS ---
 
 test "should init with valid ram/rom sizes" {
-    const data = [_]u8{0xFF} ** 0x200000; // 2MB
+    const data: [0x200000]u8 = @splat(0xFF); // 2MB
     var cart = try MBC3.init(std.testing.allocator, data[0..0x200000], 0x8000);
     defer cart.deinit();
 
@@ -162,11 +162,11 @@ test "should init with valid ram/rom sizes" {
 }
 
 test "should return error with invalid ram/rom sized" {
-    const valid_data = [_]u8{0xFF} ** 0xA000;
-    const too_big_data = [_]u8{0xFF} ** 0x204000;
-    const too_small_data = [_]u8{0xFF} ** 0x2000;
-    const undivisible_data = [_]u8{0xFF} ** 0x8001;
-    const not_p2_data = [_]u8{0xFF} ** 0xC000;
+    const valid_data: [0xA000]u8 = @splat(0xFF);
+    const too_big_data: [0x204000]u8 = @splat(0xFF);
+    const too_small_data: [0x2000]u8 = @splat(0xFF);
+    const undivisible_data: [0x8001]u8 = @splat(0xFF);
+    const not_p2_data: [0xC000]u8 = @splat(0xFF);
 
     try std.testing.expectError(error.InvalidRom, MBC3.init(
         std.testing.allocator,

@@ -34,8 +34,8 @@ sprite_data: types.ObjectAttribute = .{},
 
 pub fn init() FifoRenderer {
     return .{
-        .bg_fifo = [_]Pixel{.{}} ** 16,
-        .obj_fifo = [_]Pixel{.{}} ** 16,
+        .bg_fifo = @splat(.{}),
+        .obj_fifo = @splat(.{}),
     };
 }
 

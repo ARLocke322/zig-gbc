@@ -1,9 +1,7 @@
 const std = @import("std");
 const Console = @import("../gameboy/console.zig").Console;
 const Joypad = @import("../gameboy/joypad.zig").Joypad;
-const SDL = @cImport({
-    @cInclude("SDL3/SDL.h");
-});
+const SDL = @import("sdl");
 
 const SCALE = 4;
 const WIDTH = 160;
@@ -61,6 +59,7 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Window) void {
+        SDL.SDL_DestroyAudioStream(self.audio_stream);
         SDL.SDL_DestroyTexture(self.texture);
         SDL.SDL_DestroyRenderer(self.renderer);
         SDL.SDL_DestroyWindow(self.window);

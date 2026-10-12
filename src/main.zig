@@ -13,9 +13,6 @@ const Joypad = @import("./gameboy/joypad.zig").Joypad;
 const Window = @import("./gui/window.zig").Window;
 const InterruptController = @import("./gameboy/interrupt_controller.zig").InterruptController;
 const std = @import("std");
-const SDL = @cImport({
-    @cInclude("SDL3/SDL.h");
-});
 
 pub fn main(init: std.process.Init) !void {
     var window: Window = .init();
@@ -57,6 +54,7 @@ pub fn main(init: std.process.Init) !void {
     if (save_file_buffer) |s| cart.load(s);
 
     defer cart.deinit();
+    defer window.deinit();
 
     var interrupt_controller = InterruptController.init();
     var timer = Timer.init(&interrupt_controller);
@@ -115,4 +113,9 @@ fn writeSaveData(
     defer file.close(io);
 
     try file.writeStreamingAll(io, data);
+}
+
+test {
+    _ = @import("cartridge/MBC2.zig");
+    _ = @import("cartridge/MBC3.zig");
 }
