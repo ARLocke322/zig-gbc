@@ -22,7 +22,7 @@ dma: types.Dma,
 pub fn init(interrupt_controller: *InterruptController, cgb: bool) Ppu {
     return Ppu{
         .vram = .{},
-        .oam = [_]types.ObjectAttribute{.{}} ** 40,
+        .oam = @splat(.{}),
         .registers = .{},
         .cgb = .{ .enabled = cgb },
         .dmg = .{},

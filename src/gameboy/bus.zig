@@ -9,9 +9,9 @@ const Apu = @import("apu/apu.zig").Apu;
 const assert = std.debug.assert;
 
 pub const Bus = struct {
-    wram_0: [0x1000]u8 = .{0} ** 0x1000,
-    wram_n: [7 * 0x1000]u8 = .{0} ** (7 * 0x1000),
-    hram: [0x7F]u8 = .{0} ** 0x7F,
+    wram_0: [0x1000]u8 = @splat(0),
+    wram_n: [7 * 0x1000]u8 = @splat(0),
+    hram: [0x7F]u8 = @splat(0),
 
     wbk: u3 = 1,
 

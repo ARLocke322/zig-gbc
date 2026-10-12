@@ -1,8 +1,8 @@
 // PPU specific structs for state + memory
 pub const Vram = struct {
-    tile_data: [0x1800 * 2]u8 = [_]u8{0} ** (0x1800 * 2), // 0x1800 * 2 banks
-    tile_map_1: [0x400 * 2]u8 = [_]u8{0} ** (0x400 * 2), // 0x400 * 2 banks
-    tile_map_2: [0x400 * 2]u8 = [_]u8{0} ** (0x400 * 2), // 0x400 * 2 banks
+    tile_data: [0x1800 * 2]u8 = @splat(0), // 0x1800 * 2 banks
+    tile_map_1: [0x400 * 2]u8 = @splat(0), // 0x400 * 2 banks
+    tile_map_2: [0x400 * 2]u8 = @splat(0), // 0x400 * 2 banks
     bank: u1 = 0,
 };
 
@@ -34,11 +34,11 @@ pub const CgbState = struct {
     bg_palette_idx: CgbPaletteIndex = .{},
     object_palette_idx: CgbPaletteIndex = .{},
 
-    bg_cram: [64]u8 = [_]u8{0} ** 64,
-    object_cram: [64]u8 = [_]u8{0} ** 64,
+    bg_cram: [64]u8 = @splat(0),
+    object_cram: [64]u8 = @splat(0),
 
-    bg_palettes: [8][4]u32 = [_][4]u32{[_]u32{0xFFFFFFFF} ** 4} ** 8,
-    object_palettes: [8][4]u32 = [_][4]u32{[_]u32{0xFFFFFFFF} ** 4} ** 8,
+    bg_palettes: [8][4]u32 = @splat(@splat(0xFFFFFFFF)),
+    object_palettes: [8][4]u32 = @splat(@splat(0xFFFFFFFF)),
 
     object_priority_mode: enum(u1) { CGB, DMG } = .CGB,
 };
@@ -49,7 +49,7 @@ pub const InternalState = struct {
     current_signal: bool = false,
     stat_int_signal: bool = false,
 
-    bg_idx: [160]u2 = [_]u2{0} ** 160,
+    bg_idx: [160]u2 = @splat(0),
 
     latched: Latched = .{},
 
@@ -66,7 +66,7 @@ pub const InternalState = struct {
 };
 
 pub const DisplayState = struct {
-    display_buffer: [160 * 144]u32 = [_]u32{0} ** (160 * 144),
+    display_buffer: [160 * 144]u32 = @splat(0),
     frame_ready: bool = false,
 };
 

@@ -44,7 +44,7 @@ pub fn init(
         .channel_2 = channel_2,
         .channel_3 = channel_3,
         .channel_4 = channel_4,
-        .wave_ram = [_]u8{0} ** 16,
+        .wave_ram = @splat(0),
     };
 }
 

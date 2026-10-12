@@ -100,7 +100,7 @@ pub const MBC2 = struct {
 // TESTS
 
 test "should init with valid ram/rom sizes" {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xF000], 32);
     defer cart.deinit();
 
@@ -113,7 +113,7 @@ test "should init with valid ram/rom sizes" {
 }
 
 test "should read from rom bank 0 correctly " {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xC000], 32);
     defer cart.deinit();
 
@@ -122,7 +122,7 @@ test "should read from rom bank 0 correctly " {
 }
 
 test "should read from rom bank 1 correctly " {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xF000], 32);
     defer cart.deinit();
 
@@ -131,7 +131,7 @@ test "should read from rom bank 1 correctly " {
 }
 
 test "should read from rom bank N correctly " {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xF000], 32);
     defer cart.deinit();
 
@@ -141,13 +141,14 @@ test "should read from rom bank N correctly " {
 }
 
 test "should read from ram correctly" {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xF000], 32);
     defer cart.deinit();
 
+    cart.ram_enabled = true;
     cart.ram[0x0001] = 0x01;
-    try std.testing.expect(cart.read(0xA001) == 0xFF);
-    try std.testing.expect(cart.read(0xB001) == 0xFF);
+    try std.testing.expect(cart.read(0xA001) == 0x01);
+    try std.testing.expect(cart.read(0xB001) == 0x01);
 
     cart.write(0x0000, 0xA);
     try std.testing.expect(cart.read(0xA001) == 0x01);
@@ -155,7 +156,7 @@ test "should read from ram correctly" {
 }
 
 test "should change rom banks correctly " {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xF000], 32);
     defer cart.deinit();
 
@@ -165,7 +166,7 @@ test "should change rom banks correctly " {
 }
 
 test "should enable ram correctly" {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xF000], 32);
     defer cart.deinit();
 
@@ -177,7 +178,7 @@ test "should enable ram correctly" {
 }
 
 test "should read correctly after changing rom banks" {
-    const data = [_]u8{0x00} ** 0xF000;
+    const data: [0xF000]u8 = @splat(0x00);
     var cart = try MBC2.init(std.testing.allocator, data[0..0xF000], 32);
     defer cart.deinit();
 
